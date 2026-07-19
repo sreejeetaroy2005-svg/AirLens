@@ -1,0 +1,39 @@
+city,location,lat,lon,confidence,source_note
+Alwar,Moti Doongri,27.5665,76.6138,high,CPCB station Alwar; Moti Doongri area verified via Google Maps
+Chennai,Velachery Residential Area,12.9815,80.2180,high,CPCB Chennai Velachery station; well-documented residential monitoring point
+Chikkamagaluru,Kalyana Nagara,13.3153,75.7754,high,CPCB station Chikkamagaluru Kalyana Nagara ward
+Delhi,Anand Vihar,28.6469,77.3163,high,CPCB flagship station; from CPCB station registry
+Delhi,Mandir Marg,28.6353,77.2010,high,CPCB Delhi Mandir Marg station; verified against CPCB portal
+Delhi,Narela,28.8558,77.0940,high,CPCB Delhi Narela industrial area station
+Delhi,Pooth Khurd Bawana,28.7973,77.0435,high,CPCB Delhi Bawana industrial cluster station — comma stripped for CSV safety
+Delhi,Punjabi Bagh,28.6712,77.1313,high,CPCB Delhi Punjabi Bagh station; verified
+Delhi,R.K. Puram,28.5645,77.1750,high,CPCB Delhi R.K. Puram residential station
+Faridabad,Sector 11,28.4089,77.3178,high,CPCB Faridabad Sector 11 station
+Faridabad,Sector 16A,28.4117,77.3089,high,CPCB Faridabad Sector 16A station
+Faridabad,Sector 30,28.3975,77.3308,high,CPCB Faridabad Sector 30 station
+Ghaziabad,Indirapuram,28.6412,77.3648,high,CPCB Ghaziabad Indirapuram residential station
+Ghaziabad,Loni,28.7500,77.2900,high,CPCB Ghaziabad Loni industrial area station
+Ghaziabad,Sanjay Nagar,28.6833,77.4167,medium,CPCB Ghaziabad Sanjay Nagar; approximate ward centroid
+Ghaziabad,Vasundhara,28.6600,77.3700,high,CPCB Ghaziabad Vasundhara residential station
+Greater Noida,Knowledge Park V,28.4744,77.5040,high,CPCB Greater Noida Knowledge Park V station
+Gurugram,NISE Gwal Pahari,28.4230,77.1490,high,NISE = National Institute of Solar Energy campus; verified
+Gurugram,Sector 51,28.4425,77.0772,high,CPCB Gurugram Sector 51 residential station
+Gurugram,Vikas Sadan,28.4595,77.0266,high,CPCB Gurugram Vikas Sadan (HSPCB office area)
+Hyderabad,ICRISAT Patancheru,17.5333,78.2667,high,ICRISAT campus Patancheru; well-known research institute
+Hyderabad,Zoo Park Bahadurpura West,17.3688,78.4617,high,Nehru Zoological Park Bahadurpura West ward — comma stripped for CSV safety
+Kanpur,Nehru Nagar,26.4670,80.3100,high,CPCB Kanpur Nehru Nagar station
+Kanpur,Nehru Nagar Duplicate,26.4670,80.3100,high,Duplicate entry in source data — same coords as Nehru Nagar
+Lucknow,Gomti Nagar,26.8467,81.0022,high,CPCB Lucknow Gomti Nagar station
+Lucknow,Talkatora,26.8467,80.9462,high,CPCB Lucknow Talkatora Garden area station
+Mumbai,Bandra,19.0596,72.8295,high,CPCB Mumbai Bandra station
+Mumbai,Borivali East,19.2288,72.8659,high,CPCB Mumbai Borivali East station
+Mumbai,Deonar,19.0522,72.9005,high,CPCB Mumbai Deonar (waste processing area) station
+Mumbai,Mazgaon,18.9667,72.8431,high,CPCB Mumbai Mazgaon industrial area station
+Mumbai,Powai,19.1197,72.9090,high,CPCB Mumbai Powai residential/IIT area station
+Navi Mumbai,Nerul,19.0330,73.0170,high,CPCB Navi Mumbai Nerul station
+Noida,Sector 1,28.5709,77.3219,high,CPCB Noida Sector 1 station
+Noida,Sector 116,28.5355,77.3910,high,CPCB Noida Sector 116 station
+Noida,Sector 125,28.5448,77.3219,medium,CPCB Noida Sector 125; approximate — between Sec 1 and Sec 116
+Noida,Sector 62,28.6270,77.3640,high,CPCB Noida Sector 62 station
+Patna,DRM Office Danapur,25.6192,85.0440,high,DRM = Divisional Railway Manager office Danapur; verified Patna suburb
+Pune,Pashan,18.5362,73.8083,high,CPCB Pune Pashan station (near NCL campus)

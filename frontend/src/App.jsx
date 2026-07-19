@@ -320,14 +320,14 @@ function App() {
           </div>
           <div className="stats-row">
             <span>Persistence RMSE</span>
-            <span className="stats-val" style={{ color: '#f87171' }}>26.06</span>
+            <span className="stats-val" style={{ color: '#f87171' }}>18.81</span>
           </div>
           <div className="stats-row">
             <span>LightGBM RMSE</span>
-            <span className="stats-val" style={{ color: '#4ade80' }}>16.41</span>
+            <span className="stats-val" style={{ color: '#4ade80' }}>15.68</span>
           </div>
           <div style={{ fontSize: '0.75rem', color: '#888', marginTop: 4, marginBottom: 10 }}>
-            ↓ 37% improvement over persistence
+            ↓ 17% improvement over persistence
           </div>
 
           {/* Source attribution accuracy — item 1 */}
