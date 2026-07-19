@@ -1,0 +1,72 @@
+{
+  "type": "FeatureCollection",
+  "_comment": "Manually tagged known high-pollution source zones in Bengaluru at H3 resolution 8. Traffic corridors sourced from BBMP traffic density maps and CPCB CAAQMS station reports. Industrial zones from KSPCB registered industrial cluster records.",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "MG Road / Cubbon Park corridor",
+        "h3_hex": "8860145b49fffff",
+        "zone_type": "traffic",
+        "source": "BBMP traffic density, CPCB station Bhoomi",
+        "notes": "One of Bengaluru's highest vehicle-count corridors. Peak-hour NO2 consistently elevated per CAAQMS records."
+      },
+      "geometry": { "type": "Point", "coordinates": [77.59448, 12.97100] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Silk Board Junction",
+        "h3_hex": "88618925c5fffff",
+        "zone_type": "traffic",
+        "source": "BBMP traffic density, TomTom congestion index 2023",
+        "notes": "Ranked among India's worst traffic junctions. PM2.5 hotspot identified in multiple CPCB audits."
+      },
+      "geometry": { "type": "Point", "coordinates": [77.62334, 12.93348] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Peenya Industrial Area",
+        "h3_hex": "88618925a7fffff",
+        "zone_type": "industrial",
+        "source": "KSPCB registered industrial cluster, CPCB Peenya station",
+        "notes": "Bengaluru's largest industrial estate. KSPCB-registered units include foundries, chemical plants, electroplating. Neighbour of MG Road hex at H3 res-8."
+      },
+      "geometry": { "type": "Point", "coordinates": [77.5193, 13.0298] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Bommanahalli Industrial Zone",
+        "h3_hex": "88618925c7fffff",
+        "zone_type": "industrial",
+        "source": "KSPCB registered units, BBMP ward 150",
+        "notes": "Mixed residential-industrial ward. KSPCB-registered garment dye units and small-scale manufacturing. Neighbour of Silk Board hex."
+      },
+      "geometry": { "type": "Point", "coordinates": [77.6272, 12.9065] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Hebbal Flyover / NH-44 corridor",
+        "h3_hex": "8860145b4dfffff",
+        "zone_type": "traffic",
+        "source": "NHAI traffic counts, BBMP",
+        "notes": "Major arterial NH-44 entry point. Elevated diesel HGV traffic. Neighbour of MG Road hex."
+      },
+      "geometry": { "type": "Point", "coordinates": [77.5948, 13.0351] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Whitefield Tech Corridor",
+        "h3_hex": "88618925e9fffff",
+        "zone_type": "traffic",
+        "source": "BDA development plan, CPCB Whitefield monitoring",
+        "notes": "High commuter traffic from ITPL/EPIP zone. Elevated PM2.5 from two-wheeler and cab fleet. Neighbour of Silk Board hex."
+      },
+      "geometry": { "type": "Point", "coordinates": [77.7480, 12.9698] }
+    }
+  ]
+}

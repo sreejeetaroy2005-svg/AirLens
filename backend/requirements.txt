@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pandas
+h3
+lightgbm
+scikit-learn
+pyarrow
+fastparquet

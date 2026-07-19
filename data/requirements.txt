@@ -1,0 +1,7 @@
+pandas
+requests
+pyarrow
+fastparquet
+h3
+lightgbm
+scikit-learn
