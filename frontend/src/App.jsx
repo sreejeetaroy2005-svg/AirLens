@@ -9,6 +9,7 @@ import AdvisoryBanner from './AdvisoryBanner';
 import HexPopup from './HexPopup';
 import RecommendationsPanel from './RecommendationsPanel';
 import CityComparison from './CityComparison';
+import FeatureTour from './FeatureTour';
 import './index.css';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -288,10 +289,10 @@ function App() {
       )}
 
       {/* ─── Right control panel ─────────────────────────────────────────── */}
-      <div className="ui-panel">
+      <div className="ui-panel" id="tour-control-panel">
 
         {/* Identity */}
-        <div>
+        <div id="tour-identity">
           <div style={{
             fontFamily: 'var(--font-mono)', fontSize: '0.58rem',
             letterSpacing: '0.2em', textTransform: 'uppercase',
@@ -309,7 +310,7 @@ function App() {
         </div>
 
         {/* City selector */}
-        <div>
+        <div id="tour-city-selector">
           <h2>Active City</h2>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
             {['Delhi','Ghaziabad','Noida','Mumbai'].map(c => (
@@ -374,7 +375,7 @@ function App() {
         )}
 
         {/* Horizon control */}
-        <div className="control-group">
+        <div className="control-group" id="tour-horizon">
           <h2>Forecast Horizon</h2>
           <div className="button-group">
             {[['0','NOW'],['24','+24H'],['48','+48H'],['72','+72H']].map(([val, label]) => (
@@ -398,7 +399,7 @@ function App() {
         </div>
 
         {/* Source attribution toggle */}
-        <div>
+        <div id="tour-source-toggle">
           <div className="toggle-row" style={{ marginBottom: 6 }}>
             <span>Source Attribution</span>
             <label className="switch">
@@ -456,7 +457,7 @@ function App() {
         </div>
 
         {/* Model stats */}
-        <div className="stats-box">
+        <div className="stats-box" id="tour-model-stats">
           <div style={{
             fontFamily: 'var(--font-mono)',
             fontSize: '0.58rem',
@@ -543,6 +544,9 @@ function App() {
         </div>
 
       </div>
+      {/* ─── Feature Tour ────────────────────────────────────────────────── */}
+      <FeatureTour />
+
     </div>
   );
 }
