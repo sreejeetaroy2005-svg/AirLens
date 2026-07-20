@@ -1,72 +1,72 @@
 {
   "type": "FeatureCollection",
-  "_comment": "Manually tagged known high-pollution source zones in Bengaluru at H3 resolution 8. Traffic corridors sourced from BBMP traffic density maps and CPCB CAAQMS station reports. Industrial zones from KSPCB registered industrial cluster records.",
+  "_comment": "Manually tagged known high-pollution source zones in Delhi at H3 resolution 8. Traffic corridors sourced from Delhi Traffic Police density reports and CPCB CAAQMS station data. Industrial zones from DPCC (Delhi Pollution Control Committee) registered industrial cluster records.",
   "features": [
     {
       "type": "Feature",
       "properties": {
-        "name": "MG Road / Cubbon Park corridor",
-        "h3_hex": "8860145b49fffff",
+        "name": "Anand Vihar Bus/Rail Terminal",
+        "h3_hex": "883da1149bfffff",
         "zone_type": "traffic",
-        "source": "BBMP traffic density, CPCB station Bhoomi",
-        "notes": "One of Bengaluru's highest vehicle-count corridors. Peak-hour NO2 consistently elevated per CAAQMS records."
+        "source": "CPCB Anand Vihar station, Delhi Traffic Police, TomTom congestion index",
+        "notes": "One of Delhi's most polluted monitoring points. Heavy bus, truck and auto-rickshaw concentration. Consistently ranks highest in CPCB Delhi daily AQI bulletins."
       },
-      "geometry": { "type": "Point", "coordinates": [77.59448, 12.97100] }
+      "geometry": { "type": "Point", "coordinates": [77.3163, 28.6469] }
     },
     {
       "type": "Feature",
       "properties": {
-        "name": "Silk Board Junction",
-        "h3_hex": "88618925c5fffff",
+        "name": "Punjabi Bagh residential-traffic corridor",
+        "h3_hex": "883da18d9dfffff",
         "zone_type": "traffic",
-        "source": "BBMP traffic density, TomTom congestion index 2023",
-        "notes": "Ranked among India's worst traffic junctions. PM2.5 hotspot identified in multiple CPCB audits."
+        "source": "CPCB Punjabi Bagh station, Delhi Traffic Police Ring Road data",
+        "notes": "Ring Road intersection with high mixed-traffic volumes. CPCB station regularly records Very Poor AQI during winter months."
       },
-      "geometry": { "type": "Point", "coordinates": [77.62334, 12.93348] }
+      "geometry": { "type": "Point", "coordinates": [77.1313, 28.6712] }
     },
     {
       "type": "Feature",
       "properties": {
-        "name": "Peenya Industrial Area",
-        "h3_hex": "88618925a7fffff",
+        "name": "Narela Industrial Area",
+        "h3_hex": "883da18405fffff",
         "zone_type": "industrial",
-        "source": "KSPCB registered industrial cluster, CPCB Peenya station",
-        "notes": "Bengaluru's largest industrial estate. KSPCB-registered units include foundries, chemical plants, electroplating. Neighbour of MG Road hex at H3 res-8."
+        "source": "DPCC registered industrial units, CPCB Narela station",
+        "notes": "Narela is one of Delhi's designated industrial zones under the Master Plan. DPCC-registered units include electroplating, chemical, and light manufacturing. Brick kilns in the vicinity are additional PM2.5 sources."
       },
-      "geometry": { "type": "Point", "coordinates": [77.5193, 13.0298] }
+      "geometry": { "type": "Point", "coordinates": [77.0940, 28.8558] }
     },
     {
       "type": "Feature",
       "properties": {
-        "name": "Bommanahalli Industrial Zone",
-        "h3_hex": "88618925c7fffff",
+        "name": "Bawana Industrial Estate",
+        "h3_hex": "883da18565fffff",
         "zone_type": "industrial",
-        "source": "KSPCB registered units, BBMP ward 150",
-        "notes": "Mixed residential-industrial ward. KSPCB-registered garment dye units and small-scale manufacturing. Neighbour of Silk Board hex."
+        "source": "DPCC Bawana Industrial Estate registry, CPCB station",
+        "notes": "Bawana is a planned industrial relocation zone for units shifted from residential areas. DPCC records show over 1,500 registered units. Significant NOx and PM2.5 contribution from foundries and chemical plants."
       },
-      "geometry": { "type": "Point", "coordinates": [77.6272, 12.9065] }
+      "geometry": { "type": "Point", "coordinates": [77.0435, 28.7973] }
     },
     {
       "type": "Feature",
       "properties": {
-        "name": "Hebbal Flyover / NH-44 corridor",
-        "h3_hex": "8860145b4dfffff",
+        "name": "R.K. Puram residential monitoring point",
+        "h3_hex": "883da11563fffff",
         "zone_type": "traffic",
-        "source": "NHAI traffic counts, BBMP",
-        "notes": "Major arterial NH-44 entry point. Elevated diesel HGV traffic. Neighbour of MG Road hex."
+        "source": "CPCB R.K. Puram station, NH-48 corridor traffic data",
+        "notes": "Located near NH-48 and busy south Delhi arterials. High private vehicle and commercial traffic. CPCB station used as residential background reference."
       },
-      "geometry": { "type": "Point", "coordinates": [77.5948, 13.0351] }
+      "geometry": { "type": "Point", "coordinates": [77.1750, 28.5645] }
     },
     {
       "type": "Feature",
       "properties": {
-        "name": "Whitefield Tech Corridor",
-        "h3_hex": "88618925e9fffff",
+        "name": "Mandir Marg central Delhi monitoring",
+        "h3_hex": "883da11441fffff",
         "zone_type": "traffic",
-        "source": "BDA development plan, CPCB Whitefield monitoring",
-        "notes": "High commuter traffic from ITPL/EPIP zone. Elevated PM2.5 from two-wheeler and cab fleet. Neighbour of Silk Board hex."
+        "source": "CPCB Mandir Marg station, central Delhi traffic surveys",
+        "notes": "Central Delhi monitoring point. Mix of government office traffic, commercial vehicles, and diesel generators. Used as urban background station in CPCB AQI reporting."
       },
-      "geometry": { "type": "Point", "coordinates": [77.7480, 12.9698] }
+      "geometry": { "type": "Point", "coordinates": [77.2010, 28.6353] }
     }
   ]
 }

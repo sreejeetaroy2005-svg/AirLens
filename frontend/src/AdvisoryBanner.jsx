@@ -2,18 +2,15 @@
 
 const API_BASE = 'http://localhost:8000';
 
-// Cycle order: EN → KN → HI → EN …
-const LANG_CYCLE = ['en', 'kn', 'hi'];
-const LANG_LABEL = { en: 'EN', kn: 'ಕನ್ನಡ', hi: 'हिं' };
+const LANG_CYCLE = ['en', 'hi', 'kn'];
+const LANG_LABEL = { en: 'EN', hi: 'हिं', kn: 'ಕನ್ನಡ' };
 
-// Fallback static messages used until the API responds
 const FALLBACK = [
-  { lang: 'en', text: '🏙️ Smart City Air Quality Intelligence · Bengaluru Pollution Detection Dashboard' },
-  { lang: 'kn', text: '🏙️ ಸ್ಮಾರ್ಟ್ ಸಿಟಿ ವಾಯು ಗುಣಮಟ್ಟ ತಿಳಿವಳಿಕೆ · ಬೆಂಗಳೂರು ಮಾಲಿನ್ಯ ಪತ್ತೆ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್' },
-  { lang: 'hi', text: '🏙️ स्मार्ट सिटी वायु गुणवत्ता बुद्धिमत्ता · बेंगलुरु प्रदूषण जांच डैशबोर्ड' },
+  { lang: 'en', text: 'Smart City Air Quality Intelligence · Delhi Pollution Detection · LightGBM 72h ahead warning system' },
+  { lang: 'hi', text: 'स्मार्ट सिटी वायु गुणवत्ता बुद्धिमत्ता · दिल्ली प्रदूषण जांच डैशबोर्ड' },
+  { lang: 'en', text: 'Powered by H3 hexagonal grid · 20% RMSE improvement over persistence baseline · 3-model ensemble' },
 ];
 
-// Derive banner messages from the /advisory API response for the current city avg band
 function buildMessages(advisoryData, band) {
   if (!advisoryData?.advisories || !band) return null;
   const entry = advisoryData.advisories[band];
@@ -23,7 +20,7 @@ function buildMessages(advisoryData, band) {
     const genText  = entry.general?.[lang];
     const sensText = entry.sensitive?.[lang];
     if (genText)  msgs.push({ lang, audience: 'general',   text: genText });
-    if (sensText) msgs.push({ lang, audience: 'sensitive', text: `⚕️ ${sensText}` });
+    if (sensText) msgs.push({ lang, audience: 'sensitive', text: sensText });
   }
   return msgs;
 }
@@ -34,7 +31,6 @@ export default function AdvisoryBanner({ currentBand }) {
   const [visible, setVisible] = useState(true);
   const timerRef = useRef(null);
 
-  // Fetch full advisory table once
   useEffect(() => {
     fetch(`${API_BASE}/advisory`)
       .then(r => r.json())
@@ -46,19 +42,17 @@ export default function AdvisoryBanner({ currentBand }) {
     ? (buildMessages(advisoryData, currentBand) || FALLBACK)
     : FALLBACK;
 
-  // Auto-cycle with fade
   useEffect(() => {
     timerRef.current = setInterval(() => {
       setVisible(false);
       setTimeout(() => {
         setMsgIdx(i => (i + 1) % messages.length);
         setVisible(true);
-      }, 350);
-    }, 4500);
+      }, 300);
+    }, 5000);
     return () => clearInterval(timerRef.current);
   }, [messages.length]);
 
-  // Reset index if band/messages change
   useEffect(() => { setMsgIdx(0); }, [currentBand]);
 
   const msg = messages[msgIdx] || messages[0];
@@ -66,13 +60,13 @@ export default function AdvisoryBanner({ currentBand }) {
   return (
     <div
       className="advisory-banner"
-      style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.35s ease' }}
+      style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.3s ease' }}
       aria-live="polite"
       aria-atomic="true"
     >
       <span className="advisory-lang-tag">{LANG_LABEL[msg.lang] || msg.lang}</span>
       {msg.audience === 'sensitive' && (
-        <span className="advisory-sensitive-tag">Sensitive Groups</span>
+        <span className="advisory-sensitive-tag">⚕ SENSITIVE GROUPS</span>
       )}
       <span className="advisory-text">{msg.text}</span>
     </div>

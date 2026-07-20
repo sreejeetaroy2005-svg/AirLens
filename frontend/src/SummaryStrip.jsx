@@ -19,20 +19,46 @@ function dominantBand(features) {
   return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
 }
 
-// onBandChange: callback to parent to pass the dominant band for advisory
-export default function SummaryStrip({ geoData, horizon, onBandChange }) {
+const BAND_ACCENT = {
+  Good:         'var(--good)',
+  Satisfactory: 'var(--satisfactory)',
+  Moderate:     'var(--moderate)',
+  Poor:         'var(--poor)',
+  'Very Poor':  'var(--very-poor)',
+  Severe:       'var(--severe)',
+};
+
+// Live "last updated" heartbeat ticker
+function Heartbeat() {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setElapsed(e => e + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const mins = Math.floor(elapsed / 60);
+  const secs = elapsed % 60;
+  const label = elapsed < 60 ? `${secs}s ago` : `${mins}m ${secs}s ago`;
+  return (
+    <div className="heartbeat-tick">
+      <span className="heartbeat-dot" />
+      UPDATED {label}
+    </div>
+  );
+}
+
+export default function SummaryStrip({ geoData, horizon, activeCity, onBandChange }) {
   const [forecast72, setForecast72] = useState(null);
 
   useEffect(() => {
-    fetch(`${API_BASE}/forecast?hours=72`)
+    const cityParam = activeCity ? `&city=${activeCity}` : '';
+    fetch(`${API_BASE}/forecast?hours=72${cityParam}`)
       .then(r => r.json())
       .then(setForecast72)
       .catch(() => {});
-  }, []);
+  }, [activeCity]);
 
   const stats = useMemo(() => {
     if (!geoData?.features?.length) return null;
-
     const features = geoData.features;
     const total = features.length;
 
@@ -40,86 +66,110 @@ export default function SummaryStrip({ geoData, horizon, onBandChange }) {
       const sev = SEVERITY[f.properties?.cpcb_band] ?? 0;
       return sev >= SEVERITY['Poor'];
     }).length;
-    const poorPct = ((poorCount / total) * 100).toFixed(1);
+    const poorPct = ((poorCount / total) * 100).toFixed(0);
 
     const currentAvg = avgAqi(features);
     const forecastAvg = forecast72 ? avgAqi(forecast72.features) : null;
 
-    let trendIcon = '—';
-    let trendColor = '#888';
-    let trendLabel = '';
+    let trendSymbol = '—';
+    let trendColor  = 'var(--text-dim)';
+    let trendDelta  = '';
     if (forecastAvg !== null) {
       const delta = forecastAvg - currentAvg;
       if (delta > 5) {
-        trendIcon = '↑'; trendColor = '#f87171';
-        trendLabel = `+${delta.toFixed(1)} AQI over 72h`;
+        trendSymbol = '↑'; trendColor = 'var(--very-poor)';
+        trendDelta = `+${delta.toFixed(0)}`;
       } else if (delta < -5) {
-        trendIcon = '↓'; trendColor = '#4ade80';
-        trendLabel = `${delta.toFixed(1)} AQI over 72h`;
+        trendSymbol = '↓'; trendColor = 'var(--good)';
+        trendDelta = `${delta.toFixed(0)}`;
       } else {
-        trendIcon = '→'; trendColor = '#fbbf24';
-        trendLabel = 'Stable over 72h';
+        trendSymbol = '→'; trendColor = 'var(--moderate)';
+        trendDelta = '±0';
       }
     }
 
     return {
       total,
       poorPct,
-      trendIcon, trendColor, trendLabel,
-      currentAvg: currentAvg.toFixed(1),
+      trendSymbol, trendColor, trendDelta,
+      currentAvg: currentAvg.toFixed(0),
       band: dominantBand(features),
     };
   }, [geoData, forecast72]);
 
-  // Notify parent of dominant band whenever it changes
   useEffect(() => {
     if (stats?.band && onBandChange) onBandChange(stats.band);
   }, [stats?.band]);
 
-  if (!stats) return null;
+  if (!stats) return (
+    <div className="summary-strip-bar">
+      <div className="summary-item">
+        <span className="summary-label">Initialising</span>
+        <span className="summary-value" style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>—</span>
+      </div>
+    </div>
+  );
+
+  const bandColor = BAND_ACCENT[stats.band] || 'var(--text-primary)';
 
   return (
     <div className="summary-strip-bar">
+      {/* System ID */}
+      <div className="summary-item" style={{ paddingLeft: 0 }}>
+        <span className="summary-label">System</span>
+        <span className="summary-value" style={{ fontSize: '0.78rem', letterSpacing: '0.06em', fontWeight: 700 }}>
+          AQI·INTEL
+          <span className="unit">v1</span>
+        </span>
+      </div>
+
       <div className="summary-item">
         <span className="summary-label">Hexes Monitored</span>
         <span className="summary-value">{stats.total}</span>
       </div>
-      <div className="summary-divider" />
 
       <div className="summary-item">
         <span className="summary-label">City Avg AQI</span>
-        <span className="summary-value">{stats.currentAvg}</span>
-      </div>
-      <div className="summary-divider" />
-
-      <div className="summary-item">
-        <span className="summary-label">Poor-or-Worse</span>
-        <span className="summary-value" style={{ color: Number(stats.poorPct) > 30 ? '#f87171' : '#4ade80' }}>
-          {stats.poorPct}%
+        <span className="summary-value" style={{ color: bandColor }}>
+          {stats.currentAvg}
+          <span className="unit">AQI</span>
         </span>
       </div>
-      <div className="summary-divider" />
+
+      <div className="summary-item">
+        <span className="summary-label">Poor+ Hexes</span>
+        <span className="summary-value" style={{ color: Number(stats.poorPct) > 30 ? 'var(--very-poor)' : 'var(--good)' }}>
+          {stats.poorPct}
+          <span className="unit">%</span>
+        </span>
+      </div>
+
+      <div className="summary-item">
+        <span className="summary-label">Dominant Band</span>
+        <span className="summary-value" style={{ color: bandColor, fontSize: '0.85rem' }}>
+          {stats.band || '—'}
+        </span>
+      </div>
 
       <div className="summary-item">
         <span className="summary-label">72h Trend</span>
-        <span className="summary-value" style={{ color: stats.trendColor, fontSize: '1.1rem' }}>
-          {stats.trendIcon}
-          <span style={{ fontSize: '0.75rem', marginLeft: 6, color: '#aaa', fontWeight: 400 }}>
-            {stats.trendLabel}
-          </span>
+        <span className="summary-value" style={{ color: stats.trendColor }}>
+          {stats.trendSymbol}
+          <span className="unit" style={{ color: stats.trendColor, opacity: 0.8 }}>{stats.trendDelta} AQI</span>
         </span>
       </div>
-      <div className="summary-divider" />
 
-      {/* ── Item 4: Lead-time stat ── */}
-      <div className="summary-item" title="How far ahead this system can warn of a threshold breach vs. traditional reactive CAAQMS detection (0h)">
-        <span className="summary-label">Forecast Lead Time</span>
-        <span className="summary-value" style={{ color: '#a78bfa' }}>
-          Up to 72h
-          <span style={{ fontSize: '0.68rem', color: '#666', marginLeft: 6, fontWeight: 400 }}>
-            vs. 0h reactive
-          </span>
+      <div className="summary-item">
+        <span className="summary-label">Lead Time</span>
+        <span className="summary-value" style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>
+          72
+          <span className="unit">h ahead</span>
         </span>
+      </div>
+
+      {/* Push heartbeat to far right */}
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', paddingLeft: 22 }}>
+        <Heartbeat />
       </div>
     </div>
   );
