@@ -1,7 +1,6 @@
 # data/config.py
 #
 # TARGET CITY: Delhi
-# Bengaluru is not present in india_air_quality_consolidated.csv.
 # Delhi was chosen as the target city based on STEP A analysis:
 #   - 22,058 rows (largest dataset, 2.5x the next city)
 #   - Longest date span: 2013-12-31 to 2025-12-05 (4,358 days)
@@ -14,9 +13,6 @@
 TARGET_CITY    = "Delhi"
 TARGET_CITY_DISPLAY = "Delhi"
 CITY_BBOX      = [28.40, 76.84, 28.88, 77.35]   # [min_lat, min_lon, max_lat, max_lon]
-
-# Legacy alias kept so any code still referencing BENGALURU_BBOX doesn't hard-crash
-BENGALURU_BBOX = CITY_BBOX
 
 # Map centre for the frontend
 MAP_CENTER_LAT = 28.6139
