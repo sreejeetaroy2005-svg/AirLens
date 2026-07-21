@@ -56,44 +56,96 @@ AQI·INTEL ingests historical air quality data from 4 Indian cities, trains per-
 
 ---
 
-## Architecture
+## Architecture — Multi-Agent Pipeline
+
+AQI·INTEL is structured as a **multi-agent system**: six specialised agents, each with a single responsibility, that chain together from raw CSV to a natural-language explanation a government administrator can act on.
 
 ```
 CSV (CPCB India Air Quality)
-    │
-    ▼
-data/run_city_pipeline.py          ← unified per-city pipeline runner
-    ├── ingest.py                  ← CSV filter → hourly expand → weather merge → OSM road density
-    ├── h3_binning.py              ← H3 res-8 hex assignment + hourly aggregation
-    ├── features.py (models/)      ← lag(1h/6h/24h), rolling mean, cyclical time features
-    └── train.py (models/)         ← LightGBM 24/48/72h, chronological split, RMSE vs baseline
-    │
-    ├── data/cache/<city>/
-    │   ├── ingested_data.parquet
-    │   ├── hex_indexed_ts.parquet
-    │   ├── features.parquet
-    │   ├── lgbm_model_24h.pkl
-    │   ├── lgbm_model_48h.pkl
-    │   ├── lgbm_model_72h.pkl
-    │   └── zone_labels.json
-    │
-    ├── data/fetch_osm.py          ← class-weighted road score + industrial/construction proximity
-    ├── data/fetch_vulnerability.py← schools/hospitals/parks within 500m per hex (OSM)
-    └── data/traffic_proxy.py      ← time-of-day multiplier (rush-hour diurnal curve)
-    │
-    ▼
-backend/main.py  (FastAPI)         ← 17 endpoints, all ?city= aware
-    │
-    ▼
-frontend/src/   (React + Vite)
-    ├── App.jsx                    ← Deck.gl map, city selector, controls
-    ├── SummaryStrip.jsx           ← hero stats bar with live heartbeat ticker
-    ├── AlertsPanel.jsx            ← band-crossing signal alerts
-    ├── RecommendationsPanel.jsx   ← urgency-ranked enforcement log
-    ├── HexPopup.jsx               ← per-hex sparkline + confidence bars
-    ├── CityComparison.jsx         ← cross-city table
-    └── AdvisoryBanner.jsx         ← multilingual citizen advisory
+        │
+        ▼
+┌──────────────────────────────────────────────────────────────┐
+│  AGENT 1 — Ingestion Agent                                   │
+│  data/run_city_pipeline.py  →  ingest.py                     │
+│  • Filters CSV by city, expands daily → 24 hourly rows       │
+│  • Joins lat/lon from location_coords.csv                    │
+│  • Merges Open-Meteo weather (temperature, humidity, wind)   │
+│  • Fetches OSM road count per city bbox                      │
+│  Output: ingested_data.parquet                               │
+└──────────────────────────────────────────────────────────────┘
+        │
+        ▼
+┌──────────────────────────────────────────────────────────────┐
+│  AGENT 2 — Attribution Agent                                 │
+│  data/fetch_osm.py  +  data/traffic_proxy.py                 │
+│  • OSM highway class weights (motorway 10× → resident 0.5×) │
+│  • Industrial/construction proximity (exponential decay)     │
+│  • Ground-truth matching (DPCC/CPCB zone registry)           │
+│  • Time-of-day multiplier (AM/PM rush-hour Gaussian peaks)   │
+│  Output: osm_attribution.json (confidence 0–100 per hex)     │
+└──────────────────────────────────────────────────────────────┘
+        │
+        ▼
+┌──────────────────────────────────────────────────────────────┐
+│  AGENT 3 — Forecasting Agent                                 │
+│  data/h3_binning.py  →  models/features.py  →  models/train │
+│  • H3 res-8 hex assignment + hourly aggregation              │
+│  • Lag features (1h/6h/24h), rolling means, cyclical time   │
+│  • LightGBM 24h/48h/72h models, chronological 80/20 split   │
+│  • −17–20% RMSE vs persistence baseline across all cities   │
+│  Output: lgbm_model_{24|48|72}h.pkl per city                 │
+└──────────────────────────────────────────────────────────────┘
+        │
+        ▼
+┌──────────────────────────────────────────────────────────────┐
+│  AGENT 4 — Prioritization Agent                              │
+│  backend/main.py:  GET /recommendations                      │
+│  Composite urgency score (0–100):                            │
+│    severity 30%  +  forecast trend 30%  +                    │
+│    source confidence 20%  +  vulnerability proximity 20%     │
+│  Vulnerability = schools×3 + hospitals×2.5 (OSM, 500m)      │
+│  Output: ranked enforcement actions + evidence basis         │
+└──────────────────────────────────────────────────────────────┘
+        │
+        ▼
+┌──────────────────────────────────────────────────────────────┐
+│  AGENT 5 — Reasoning Agent                          ★ NEW   │
+│  backend/reasoning_agent.py                                  │
+│  GET /recommendations/{hex_id}/explain                       │
+│  Takes the structured Prioritization output and generates a  │
+│  natural-language explanation of WHY this zone was ranked    │
+│  where it was — causal narrative for administrators.         │
+│  • LLM: Gemini Flash when GEMINI_API_KEY is set              │
+│  • Falls back to deterministic template (always functional)  │
+│  • Ground truth scores unchanged — reasoning layer only      │
+│  Output: explanation + method + agent_pipeline trace         │
+└──────────────────────────────────────────────────────────────┘
+        │
+        ▼
+┌──────────────────────────────────────────────────────────────┐
+│  AGENT 6 — Advisory Agent                                    │
+│  backend/main.py:  GET /advisory                             │
+│  CPCB band → citizen-facing advisory in EN / HI / KN        │
+│  Two audience variants: general public + sensitive groups    │
+│  Output: multilingual health guidance (frontend banner)      │
+└──────────────────────────────────────────────────────────────┘
+        │
+        ▼
+frontend/src/  (React + Vite + Deck.gl)
+    ├── App.jsx                     ← map, city selector, controls
+    ├── SummaryStrip.jsx            ← hero stats + heartbeat ticker
+    ├── AlertsPanel.jsx             ← band-crossing signal alerts
+    ├── RecommendationsPanel.jsx    ← enforcement log
+    │     └── "Why this was flagged" — Reasoning Agent output
+    ├── HexPopup.jsx                ← sparkline + confidence bars
+    ├── CityComparison.jsx          ← cross-city comparison table
+    ├── AdvisoryBanner.jsx          ← multilingual citizen advisory
+    └── FeatureTour.jsx             ← 9-step guided demo walkthrough
 ```
+
+> Each pipeline stage is independently runnable, has its own input/output contract,
+> and can be upgraded without breaking the others. Agent 5 (Reasoning) is the only
+> stage with an external LLM dependency — all other agents are fully deterministic.
 
 ---
 
@@ -134,6 +186,23 @@ python data/fetch_vulnerability.py # schools/hospitals/parks within 500m
 # Must run from project root (paths are relative)
 python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
 ```
+
+
+### 5a. (Optional) Enable LLM Reasoning Agent
+
+The Reasoning Agent (Agent 5) generates natural-language explanations for
+why each zone was prioritized. It works immediately with a deterministic
+fallback, but plug in an LLM key for richer output:
+
+```bash
+# Edit .env in the project root (already gitignored):
+OPENROUTER_API_KEY=sk-or-v1-your-key-here
+```
+
+Get a free key at **https://openrouter.ai/keys** — uses `google/gemini-2.5-flash`
+which is in the free tier. Restart the backend after adding the key.
+
+Alternatively set `GEMINI_API_KEY` for direct Google AI Studio access.
 
 ### 5. Start the frontend
 

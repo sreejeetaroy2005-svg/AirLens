@@ -16,6 +16,12 @@ from cities import CITY_REGISTRY, CITY_KEYS, city_cache_dir
 # classification and diurnal patterns. It is NOT live vehicle telemetry.
 from traffic_proxy import apply_tod_to_confidence, tod_label, TOD_TABLE
 
+# Reasoning Agent — multi-agent pipeline stage 5
+# Generates natural-language explanations for recommendation prioritization.
+import sys as _sys
+_sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # add backend/ to path
+from reasoning_agent import generate_explanation as _generate_explanation
+
 app = FastAPI(title="Air Quality Intelligence API")
 
 DEFAULT_CITY = "Delhi"
@@ -953,6 +959,204 @@ def get_recommendations(city: str = Query(None)):
     # Sort by urgency score descending (highest urgency first)
     results.sort(key=lambda r: r["urgency_score"], reverse=True)
     return results
+
+
+@app.get("/recommendations/{hex_id}/explain")
+def explain_recommendation(
+    hex_id: str,
+    city: str = Query(None),
+):
+    """
+    Reasoning Agent endpoint — multi-agent pipeline stage 5.
+
+    Takes the structured recommendation record for a specific hex and generates
+    a natural-language explanation of WHY it was prioritized at its urgency rank.
+
+    The existing deterministic urgency score and recommendation text are
+    ground truth and are NOT modified. This endpoint adds a reasoning layer on top.
+
+    Uses Google Gemini Flash when GEMINI_API_KEY is set in the environment;
+    falls back to a high-quality deterministic template otherwise.
+
+    Multi-agent pipeline:
+      Ingestion Agent → Attribution Agent → Forecasting Agent →
+      Prioritization Agent → [Reasoning Agent] → Advisory Agent
+    """
+    # Re-run the recommendations for this city to get ranked list + full data
+    city_key = _resolve_city(city)
+
+    # Call get_recommendations with the city context — reuse full logic
+    # We build a minimal inline call rather than calling the endpoint function
+    # to avoid HTTP overhead, since we need the ranked list for rank calculation.
+    latest_df = get_latest_data_for(city_key)
+    cache     = _city_cache(city_key)
+
+    feature_cols = [c for c in [
+        'pollutant_avg', 'temperature', 'humidity', 'wind_speed', 'wind_direction',
+        'city_road_density', 'aqi_lag_1h', 'aqi_lag_6h', 'aqi_lag_24h',
+        'aqi_roll_6h_mean', 'aqi_roll_24h_mean', 'hour_sin', 'hour_cos',
+        'dow_sin', 'dow_cos'
+    ] if c in latest_df.columns]
+    X = latest_df[feature_cols].bfill().fillna(0)
+
+    forecasts = {}
+    for h in [24, 72]:
+        mp = os.path.join(cache, f"lgbm_model_{h}h.pkl")
+        if os.path.exists(mp):
+            with open(mp, "rb") as f:
+                forecasts[h] = pickle.load(f)
+
+    pred_24 = forecasts[24].predict(X) if 24 in forecasts else None
+    pred_72 = forecasts[72].predict(X) if 72 in forecasts else None
+
+    osm    = get_osm_attribution() if city_key == "Delhi" else {}
+    vuln   = get_vulnerability()   if city_key == "Delhi" else {}
+    labels = get_zone_labels_for(city_key)
+    hour   = current_data_hour(latest_df)
+    from traffic_proxy import apply_tod_to_confidence, tod_label, TOD_TABLE
+    tod_mult   = TOD_TABLE.get(hour, 1.0)
+    tod_regime = tod_label(hour)
+    road_density_75 = (latest_df['city_road_density'].quantile(0.75)
+                       if 'city_road_density' in latest_df.columns else 0)
+
+    all_recs = []
+    for i, row in latest_df.iterrows():
+        hx  = row['h3_hex']
+        aqi = float(row['pollutant_avg'])
+        band, _ = get_cpcb_band(aqi)
+        idx_pos = latest_df.index.get_loc(i)
+
+        if hx in osm:
+            rec = osm[hx]
+            t_conf = apply_tod_to_confidence(rec.get('traffic_confidence', 0), hour)
+            i_conf = rec.get('industrial_confidence', 0)
+            c_conf = rec.get('construction_confidence', 0)
+        else:
+            t_raw = 65.0 if ('city_road_density' in row and row['city_road_density'] >= road_density_75 and aqi > 60) else 20.0
+            t_conf = apply_tod_to_confidence(t_raw, hour)
+            i_conf = 65.0 if (hash(hx) % 10) > 7 else 20.0
+            c_conf = 0.0
+
+        is_traffic      = t_conf >= 40
+        is_industrial   = i_conf >= 40
+        is_construction = c_conf >= 25
+        if not is_traffic and not is_industrial and not is_construction:
+            continue
+
+        dom_scores = {'traffic': t_conf, 'industrial': i_conf, 'construction': c_conf}
+        dom_src    = max(dom_scores, key=dom_scores.get)
+        dom_conf   = dom_scores[dom_src]
+
+        aqi_24h = float(pred_24[idx_pos]) if pred_24 is not None else aqi
+        aqi_72h = float(pred_72[idx_pos]) if pred_72 is not None else aqi
+        band_24h, _ = get_cpcb_band(aqi_24h)
+        band_72h, _ = get_cpcb_band(aqi_72h)
+        worsening = SEVERITY_ORDER.get(band_24h, 0) > SEVERITY_ORDER.get(band, 0)
+
+        vr = vuln.get(hx, {})
+        vuln_score   = vr.get('vulnerability_score', 0)
+        schools_500m = vr.get('schools_500m', 0)
+        hospitals_500m = vr.get('hospitals_500m', 0)
+
+        urgency, breakdown = compute_urgency(
+            current_band=band,
+            forecast_24h_band=band_24h,
+            forecast_72h_band=band_72h,
+            dominant_confidence=dom_conf,
+            aqi_delta_24h=aqi_24h - aqi,
+            aqi_delta_72h=aqi_72h - aqi,
+            vulnerability_score=vuln_score,
+        )
+
+        if urgency >= 75:   priority = "URGENT"
+        elif urgency >= 55: priority = "HIGH"
+        elif urgency >= 35: priority = "MEDIUM"
+        else:               priority = "LOW"
+
+        try:    lat, lon = h3.h3_to_geo(hx)
+        except: lat, lon = h3.cell_to_latlng(hx)
+
+        all_recs.append({
+            "h3_hex":          hx,
+            "zone_label":      labels.get(hx, f"Zone {hx[:6]}"),
+            "lat": lat, "lon": lon,
+            "current_aqi":     round(aqi, 1),
+            "current_band":    band,
+            "forecast_24h_aqi":  round(aqi_24h, 1),
+            "forecast_24h_band": band_24h,
+            "forecast_72h_aqi":  round(aqi_72h, 1),
+            "forecast_72h_band": band_72h,
+            "urgency_score":   urgency,
+            "urgency_breakdown": breakdown,
+            "priority":        priority,
+            "dominant_source": dom_src,
+            "dominant_confidence": round(dom_conf, 1),
+            "traffic_confidence":  round(t_conf, 1),
+            "industrial_confidence": round(i_conf, 1),
+            "construction_confidence": round(c_conf, 1),
+            "is_traffic":      is_traffic,
+            "is_industrial":   is_industrial,
+            "is_construction": is_construction,
+            "vulnerability_score": round(vuln_score, 1),
+            "schools_500m":    schools_500m,
+            "hospitals_500m":  hospitals_500m,
+            "worsening_24h":   worsening,
+            "tod_hour":        hour,
+            "tod_regime":      tod_regime,
+            "tod_multiplier":  round(tod_mult, 3),
+        })
+
+    all_recs.sort(key=lambda r: r["urgency_score"], reverse=True)
+    total = len(all_recs)
+
+    # Find the requested hex
+    target = next((r for r in all_recs if r["h3_hex"] == hex_id), None)
+    if target is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Hex '{hex_id}' not found in flagged recommendations for {city_key}. "
+                   f"It may not meet the attribution threshold."
+        )
+
+    rank = next(i + 1 for i, r in enumerate(all_recs) if r["h3_hex"] == hex_id)
+
+    # Call the Reasoning Agent
+    result = _generate_explanation(target, rank, total)
+
+    return {
+        "hex_id":        hex_id,
+        "zone_label":    target["zone_label"],
+        "city":          city_key,
+        "rank":          rank,
+        "total_flagged": total,
+        "urgency_score": target["urgency_score"],
+        "priority":      target["priority"],
+        # Reasoning Agent output
+        "explanation":   result["explanation"],
+        "method":        result["method"],
+        "model":         result["model"],
+        "note":          result.get("note"),
+        # Context echoed back for frontend convenience
+        "context": {
+            "dominant_source":    target["dominant_source"],
+            "dominant_confidence": target["dominant_confidence"],
+            "current_band":       target["current_band"],
+            "current_aqi":        target["current_aqi"],
+            "forecast_24h_band":  target["forecast_24h_band"],
+            "schools_500m":       target["schools_500m"],
+            "hospitals_500m":     target["hospitals_500m"],
+            "worsening_24h":      target["worsening_24h"],
+            "tod_regime":         target["tod_regime"],
+        },
+        "agent_pipeline": [
+            "Ingestion Agent",
+            "Attribution Agent",
+            "Forecasting Agent",
+            "Prioritization Agent",
+            "Reasoning Agent",   # ← this endpoint
+            "Advisory Agent",
+        ],
+    }
 
 
 @app.get("/advisory")

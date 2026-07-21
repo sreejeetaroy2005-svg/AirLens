@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -132,21 +132,32 @@ let _seq = 1000;
 function nextSeq() { return ++_seq; }
 
 export default function RecommendationsPanel({ onSelectHex, activeCity }) {
-  const [data, setData]         = useState(null);
-  const [loading, setLoading]   = useState(true);
-  const [expanded, setExpanded] = useState(null);
+  const [data, setData]           = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [expanded, setExpanded]   = useState(null);
+  const [explainData, setExplain] = useState({});  // {hex_id: {loading, result}}
 
   useEffect(() => {
     setLoading(true);
     setExpanded(null);
-    // Recommendations only fully scored for Delhi (has OSM+vulnerability caches).
-    // For other cities we still show the rule-based results.
+    setExplain({});
     const cityParam = activeCity && activeCity !== 'Delhi' ? `?city=${activeCity}` : '';
     fetch(`${API_BASE}/recommendations${cityParam}`)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
   }, [activeCity]);
+
+  // Fetch explanation when a card is expanded
+  const fetchExplanation = useCallback((hexId, cityParam) => {
+    if (explainData[hexId]) return;   // already fetched or loading
+    setExplain(prev => ({ ...prev, [hexId]: { loading: true, result: null } }));
+    const url = `${API_BASE}/recommendations/${encodeURIComponent(hexId)}/explain${cityParam ? `?city=${cityParam}` : ''}`;
+    fetch(url)
+      .then(r => r.json())
+      .then(result => setExplain(prev => ({ ...prev, [hexId]: { loading: false, result } })))
+      .catch(() => setExplain(prev => ({ ...prev, [hexId]: { loading: false, result: null } })));
+  }, [explainData]);
 
   // Already sorted by urgency_score descending from the API
   const items = useMemo(() => {
@@ -186,7 +197,15 @@ export default function RecommendationsPanel({ onSelectHex, activeCity }) {
                 {/* Collapsed header */}
                 <div
                   style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}
-                  onClick={() => setExpanded(isOpen ? null : i)}
+                  onClick={() => {
+                    const next = isOpen ? null : i;
+                    setExpanded(next);
+                    if (next !== null) {
+                      // Trigger explanation fetch when card opens
+                      const cp = activeCity && activeCity !== 'Delhi' ? activeCity : null;
+                      fetchExplanation(item.h3_hex, cp);
+                    }
+                  }}
                 >
                   {/* Log ID */}
                   <span style={{
@@ -316,6 +335,64 @@ export default function RecommendationsPanel({ onSelectHex, activeCity }) {
                     }}>
                       {item.recommendation}
                     </p>
+
+                    {/* ── Reasoning Agent: Why this was flagged ── */}
+                    {(() => {
+                      const ex = explainData[item.h3_hex];
+                      if (!ex) return null;
+                      return (
+                        <div style={{
+                          marginTop: 8, marginBottom: 4,
+                          padding: '8px 10px',
+                          background: 'rgba(124,58,237,0.06)',
+                          border: '1px solid rgba(124,58,237,0.2)',
+                          borderRadius: 2,
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                            <div style={{
+                              fontFamily: 'var(--font-mono)', fontSize: '0.55rem',
+                              fontWeight: 700, letterSpacing: '0.12em',
+                              textTransform: 'uppercase', color: '#a78bfa',
+                            }}>
+                              Why This Was Flagged
+                            </div>
+                            <div style={{
+                              fontFamily: 'var(--font-mono)', fontSize: '0.5rem',
+                              color: 'rgba(167,139,250,0.5)', letterSpacing: '0.06em',
+                            }}>
+                              — Reasoning Agent {ex.result?.model ? `· ${ex.result.model}` : ''}
+                            </div>
+                          </div>
+                          {ex.loading ? (
+                            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'rgba(167,139,250,0.5)', letterSpacing: '0.08em' }}>
+                              REASONING…
+                            </div>
+                          ) : ex.result ? (
+                            <>
+                              <div style={{
+                                fontFamily: 'var(--font-sans)', fontSize: '0.74rem',
+                                color: 'rgba(224,214,255,0.85)', lineHeight: 1.6,
+                              }}>
+                                {ex.result.explanation}
+                              </div>
+                              {ex.result.note && (
+                                <div style={{
+                                  marginTop: 5, fontFamily: 'var(--font-mono)',
+                                  fontSize: '0.52rem', color: 'rgba(124,58,237,0.45)',
+                                  letterSpacing: '0.04em',
+                                }}>
+                                  {ex.result.note}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'rgba(167,139,250,0.4)' }}>
+                              Explanation unavailable.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* Forecast row */}
                     <div style={{ display: 'flex', gap: 10, marginBottom: 10, fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-dim)' }}>
