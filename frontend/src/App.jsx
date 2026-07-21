@@ -250,7 +250,7 @@ function App() {
     <div style={{ position: 'relative', width: '100vw', height: '100vh', background: 'var(--bg-base)' }}>
 
       {/* Advisory banner */}
-      <AdvisoryBanner currentBand={currentBand} />
+      <AdvisoryBanner currentBand={currentBand} activeCity={activeCity} />
 
       {/* Summary hero strip */}
       <SummaryStrip geoData={geoData} horizon={horizon} activeCity={activeCity} onBandChange={setCurrentBand} />

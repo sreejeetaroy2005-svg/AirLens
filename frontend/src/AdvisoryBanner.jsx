@@ -2,44 +2,60 @@
 
 const API_BASE = 'http://localhost:8000';
 
-const LANG_CYCLE = ['en', 'hi', 'kn'];
-const LANG_LABEL = { en: 'EN', hi: 'हिं', kn: 'ಕನ್ನಡ' };
+// Language labels shown in the banner tag
+const LANG_LABEL = { en: 'EN', hi: 'हिं', mr: 'मराठी' };
+
+// Languages per city — matches the backend /advisory endpoint exactly.
+// Delhi/Ghaziabad/Noida: English + Hindi
+// Mumbai: English + Hindi + Marathi
+// Kannada removed — it was a leftover from the Bengaluru planning stage
+// and does not correspond to any city in this system.
+function getLangCycle(activeCity) {
+  if (activeCity === 'Mumbai') return ['en', 'hi', 'mr'];
+  return ['en', 'hi'];
+}
 
 const FALLBACK = [
-  { lang: 'en', text: 'Smart City Air Quality Intelligence · Delhi Pollution Detection · LightGBM 72h ahead warning system' },
-  { lang: 'hi', text: 'स्मार्ट सिटी वायु गुणवत्ता बुद्धिमत्ता · दिल्ली प्रदूषण जांच डैशबोर्ड' },
-  { lang: 'en', text: 'Powered by H3 hexagonal grid · 20% RMSE improvement over persistence baseline · 3-model ensemble' },
+  { lang: 'en', text: 'Smart City Air Quality Intelligence · LightGBM 72h ahead warning · 4-city coverage' },
+  { lang: 'hi', text: 'स्मार्ट सिटी वायु गुणवत्ता बुद्धिमत्ता · LightGBM 72 घंटे पूर्व चेतावनी' },
 ];
 
-function buildMessages(advisoryData, band) {
+function buildMessages(advisoryData, band, langCycle) {
   if (!advisoryData?.advisories || !band) return null;
   const entry = advisoryData.advisories[band];
   if (!entry) return null;
   const msgs = [];
-  for (const lang of LANG_CYCLE) {
+  for (const lang of langCycle) {
     const genText  = entry.general?.[lang];
     const sensText = entry.sensitive?.[lang];
     if (genText)  msgs.push({ lang, audience: 'general',   text: genText });
     if (sensText) msgs.push({ lang, audience: 'sensitive', text: sensText });
   }
-  return msgs;
+  return msgs.length ? msgs : null;
 }
 
-export default function AdvisoryBanner({ currentBand }) {
+export default function AdvisoryBanner({ currentBand, activeCity }) {
   const [advisoryData, setAdvisoryData] = useState(null);
   const [msgIdx, setMsgIdx]   = useState(0);
   const [visible, setVisible] = useState(true);
   const timerRef = useRef(null);
 
+  const langCycle = getLangCycle(activeCity);
+
+  // Re-fetch when city changes so language set is correct
   useEffect(() => {
-    fetch(`${API_BASE}/advisory`)
+    const cityParam = activeCity ? `?city=${activeCity}` : '';
+    fetch(`${API_BASE}/advisory${cityParam}`)
       .then(r => r.json())
       .then(setAdvisoryData)
       .catch(() => {});
-  }, []);
+  }, [activeCity]);
+
+  // Reset index on city or band change
+  useEffect(() => { setMsgIdx(0); }, [currentBand, activeCity]);
 
   const messages = (advisoryData && currentBand)
-    ? (buildMessages(advisoryData, currentBand) || FALLBACK)
+    ? (buildMessages(advisoryData, currentBand, langCycle) || FALLBACK)
     : FALLBACK;
 
   useEffect(() => {
@@ -53,8 +69,6 @@ export default function AdvisoryBanner({ currentBand }) {
     return () => clearInterval(timerRef.current);
   }, [messages.length]);
 
-  useEffect(() => { setMsgIdx(0); }, [currentBand]);
-
   const msg = messages[msgIdx] || messages[0];
 
   return (
@@ -64,7 +78,7 @@ export default function AdvisoryBanner({ currentBand }) {
       aria-live="polite"
       aria-atomic="true"
     >
-      <span className="advisory-lang-tag">{LANG_LABEL[msg.lang] || msg.lang}</span>
+      <span className="advisory-lang-tag">{LANG_LABEL[msg.lang] || msg.lang.toUpperCase()}</span>
       {msg.audience === 'sensitive' && (
         <span className="advisory-sensitive-tag">⚕ SENSITIVE GROUPS</span>
       )}

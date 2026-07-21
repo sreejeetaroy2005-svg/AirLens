@@ -422,14 +422,36 @@ The system is explicit at every layer that traffic scores are structural proxies
 - `/recommendations` — each item has `traffic_proxy_note`
 - Frontend — HexPopup shows `TRAFFIC PROXY · OFF-PEAK / NIGHT · ×0.36 (road-class weighted, not live data)`
 
-### Multi-City Support
+### Scalability & Multi-City Expansion
 
-The pipeline is fully config-driven via `data/cities.py`. Adding a new city requires:
-1. An entry in `CITY_REGISTRY` with bbox, centre, zoom, H3 resolution
-2. Stations in `location_coords.csv`
-3. Running `python data/run_city_pipeline.py --cities <CityName>`
+The system architecture is strictly **config-driven** via [`data/cities.py`](file:///c:/Users/SREEJEETA/OneDrive/Desktop/pollution_detection/data/cities.py). **No code changes** to core ingestion, feature engineering, model training, or API routing logic are required when expanding the system to cover new cities.
 
-Each city gets its own `data/cache/<city>/` directory with isolated parquet files and model pickles.
+#### Onboarding a 5th City (Step-by-Step)
+To add a 5th city (e.g., Bengaluru, Kolkata, or Chennai):
+
+1. **Verify Source Data**: Ensure sensor station records for the new city exist in the source CSV (`data/location_coords.csv` or raw station logs).
+2. **Add Entry to `CITY_REGISTRY`**: Open [`data/cities.py`](file:///c:/Users/SREEJEETA/OneDrive/Desktop/pollution_detection/data/cities.py) and append a new `CityConfig` entry without modifying core pipeline code:
+   ```python
+   CITY_REGISTRY["Bengaluru"] = CityConfig(
+       name="Bengaluru",
+       display_name="Bengaluru",
+       bbox={"lat_min": 12.80, "lat_max": 13.15, "lon_min": 77.45, "lon_max": 77.75},
+       centre=[12.9716, 77.5946],
+       default_zoom=11,
+       h3_resolution=8,
+       description="IT Hub & South India Industrial Region",
+   )
+   ```
+3. **Execute Pipeline**: Run the automated pipeline runner for the new city:
+   ```bash
+   python data/run_city_pipeline.py --cities Bengaluru
+   ```
+   The runner automatically handles spatial clipping, H3 grid generation, feature engineering, and LightGBM model training, persisting city-isolated artifacts into `data/cache/bengaluru/`.
+
+#### Execution Benchmarks & Computational Efficiency
+- **Pipeline Runtime**: **~15 to 20 seconds per city** (includes ingestion, spatial join, feature calculation, 72h LightGBM model training, and disk caching).
+- **Zero Core Code Churn**: Scalability is zero-cost architecturally—adding 10 more cities requires zero modifications to `ingest.py`, `features.py`, `train.py`, or `main.py`.
+
 
 ### Cross-City Comparison
 

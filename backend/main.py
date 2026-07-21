@@ -1325,114 +1325,139 @@ def explain_recommendation(
 
 
 @app.get("/advisory")
-def get_advisory(hex_id: str = Query(None, description="Optional H3 hex for localised advisory")):
+def get_advisory(
+    hex_id: str = Query(None),
+    city:   str = Query(None),
+):
     """
-    Returns citizen advisories for each CPCB band in two audience variants
-    (general public + sensitive groups) with English, Kannada, and Hindi translations.
-    If hex_id is provided, returns advisory for that hex's current band.
-    Otherwise returns the full advisory table for all bands.
+    Citizen advisories per CPCB band. Language coverage:
+      Delhi/Ghaziabad/Noida -> English + Hindi
+      Mumbai                -> English + Hindi + Marathi
+    Kannada removed (leftover from earlier planning; not used by any current city).
     """
+    city_key    = _resolve_city(city) if city else "Delhi"
+    use_marathi = city_key == "Mumbai"
+
+    def band(en, hi, mr=None):
+        d = {"en": en, "hi": hi}
+        if use_marathi and mr:
+            d["mr"] = mr
+        return d
+
     ADVISORIES = {
         "Good": {
-            "general": {
-                "en": "Air quality is Good. Safe for all outdoor activities.",
-                "kn": "ಗಾಳಿಯ ಗುಣಮಟ್ಟ ಉತ್ತಮವಾಗಿದೆ. ಎಲ್ಲಾ ಹೊರಾಂಗಣ ಚಟುವಟಿಕೆಗಳಿಗೆ ಸುರಕ್ಷಿತ.",
-                "hi": "वायु गुणवत्ता अच्छी है। सभी बाहरी गतिविधियों के लिए सुरक्षित।"
-            },
-            "sensitive": {
-                "en": "Air quality is Good. Children and elderly can participate in all outdoor activities normally.",
-                "kn": "ಗಾಳಿಯ ಗುಣಮಟ್ಟ ಉತ್ತಮ. ಮಕ್ಕಳು ಮತ್ತು ವೃದ್ಧರು ಸಾಮಾನ್ಯವಾಗಿ ಎಲ್ಲಾ ಚಟುವಟಿಕೆಗಳಲ್ಲಿ ಭಾಗವಹಿಸಬಹುದು.",
-                "hi": "वायु गुणवत्ता अच्छी है। बच्चे और बुजुर्ग सभी बाहरी गतिविधियों में सामान्य रूप से भाग ले सकते हैं।"
-            }
+            "general": band(
+                "Air quality is Good. Safe for all outdoor activities.",
+                "vayu gunvatta achhi hai. Sabhi bahari gatividhiyon ke liye surakshit.",
+                "Haveci gunavatta changli ahe. Sarva bahyakrtyansathi surakshit."
+            ),
+            "sensitive": band(
+                "Air quality is Good. Children and elderly can participate in all outdoor activities normally.",
+                "Bachche aur buzurg sabhi bahari gatividhiyon mein bhag le sakte hain.",
+                "Mule ani vruddh sarva bahyakriyanmadhe samanyanpane sahabhagi hovu shaktat."
+            ),
         },
         "Satisfactory": {
-            "general": {
-                "en": "Air quality is Satisfactory. Suitable for most outdoor activities.",
-                "kn": "ಗಾಳಿಯ ಗುಣಮಟ್ಟ ಸಮಾಧಾನಕರವಾಗಿದೆ. ಹೆಚ್ಚಿನ ಹೊರಾಂಗಣ ಚಟುವಟಿಕೆಗಳಿಗೆ ಸೂಕ್ತ.",
-                "hi": "वायु गुणवत्ता संतोषजनक है। अधिकांश बाहरी गतिविधियों के लिए उपयुक्त।"
-            },
-            "sensitive": {
-                "en": "Satisfactory air quality. Sensitive individuals should avoid prolonged strenuous activity outdoors.",
-                "kn": "ಸಮಾಧಾನಕರ ಗಾಳಿ. ಸಂವೇದನಾಶೀಲ ವ್ಯಕ್ತಿಗಳು ದೀರ್ಘ ಕಾಲದ ಶ್ರಮದಾಯಕ ಚಟುವಟಿಕೆಗಳನ್ನು ತಪ್ಪಿಸಬೇಕು.",
-                "hi": "संतोषजनक वायु गुणवत्ता। संवेदनशील व्यक्तियों को लंबे समय तक ज़ोरदार बाहरी गतिविधि से बचना चाहिए।"
-            }
+            "general": band(
+                "Air quality is Satisfactory. Suitable for most outdoor activities.",
+                "Vayu gunvatta santoshjanak hai. Adhikans bahari gatividhiyon ke liye upyukt.",
+                "Haveci gunavatta samadhanakarak ahe. Bahyakrityansathi yogya."
+            ),
+            "sensitive": band(
+                "Satisfactory air quality. Sensitive individuals should avoid prolonged strenuous activity outdoors.",
+                "Samvedanshil vyaktiyon ko lambey samay tak zordaar bahari gatividhi se bachna chahiye.",
+                "Samvedanshil vyaktinni baherdil dirghkalin kathor kriya talave."
+            ),
         },
         "Moderate": {
-            "general": {
-                "en": "Moderate air quality. Limit prolonged outdoor exertion. Consider wearing a mask if exercising outdoors.",
-                "kn": "ಮಧ್ಯಮ ಗಾಳಿ ಗುಣಮಟ್ಟ. ದೀರ್ಘ ಹೊರಾಂಗಣ ಪರಿಶ್ರಮ ಮಿತಿಗೊಳಿಸಿ. ವ್ಯಾಯಾಮ ಮಾಡುವಾಗ ಮಾಸ್ಕ್ ಧರಿಸಿ.",
-                "hi": "मध्यम वायु गुणवत्ता। लंबे समय तक बाहरी परिश्रम सीमित करें। बाहर व्यायाम करते समय मास्क पहनें।"
-            },
-            "sensitive": {
-                "en": "Moderate AQI: Children, elderly, and people with asthma or heart conditions should limit outdoor time and carry prescribed inhalers.",
-                "kn": "ಮಧ್ಯಮ AQI: ಮಕ್ಕಳು, ವೃದ್ಧರು ಮತ್ತು ಉಸಿರಾಟದ ತೊಂದರೆ ಇರುವವರು ಹೊರಾಂಗಣ ಸಮಯ ಮಿತಿಗೊಳಿಸಬೇಕು ಮತ್ತು ಇನ್‌ಹೇಲರ್ ಇಟ್ಟುಕೊಳ್ಳಬೇಕು.",
-                "hi": "मध्यम AQI: बच्चों, बुजुर्गों और अस्थमा/हृदय रोगियों को बाहरी समय सीमित करना चाहिए और निर्धारित इनहेलर साथ रखना चाहिए।"
-            }
+            "general": band(
+                "Moderate air quality. Limit prolonged outdoor exertion. Consider wearing a mask if exercising outdoors.",
+                "Madhyam vayu gunvatta. Lambe samay tak bahari parishram seemit karen. Mask pahnen.",
+                "Madhyam haveci gunavatta. Baher dirghkalin shram maryadit kara. Mask ghala."
+            ),
+            "sensitive": band(
+                "Moderate AQI: Children, elderly, and people with asthma or heart conditions should limit outdoor time and carry prescribed inhalers.",
+                "Madhyam AQI: Bachchon, buzurgon aur asthma/hriday rogiyon ko bahari samay seemit karen aur inhaler rakhein.",
+                "Madhyam AQI: Mule, vruddh ani dama/hriday rugnanni bahyakal maryadit kara ani inhaler soba theva."
+            ),
         },
         "Poor": {
-            "general": {
-                "en": "Poor air quality. Avoid prolonged outdoor activities. Use N95/FFP2 mask if going outside.",
-                "kn": "ಕಳಪೆ ಗಾಳಿ ಗುಣಮಟ್ಟ. ದೀರ್ಘ ಹೊರಾಂಗಣ ಚಟುವಟಿಕೆಗಳನ್ನು ತಪ್ಪಿಸಿ. ಹೊರಗೆ ಹೋಗುವಾಗ N95 ಮಾಸ್ಕ್ ಬಳಸಿ.",
-                "hi": "खराब वायु गुणवत्ता। लंबे समय तक बाहरी गतिविधियों से बचें। बाहर जाते समय N95/FFP2 मास्क का उपयोग करें।"
-            },
-            "sensitive": {
-                "en": "Poor AQI — HIGH RISK for sensitive groups. Children, elderly, and respiratory patients should stay indoors. Close windows and use air purifiers if available.",
-                "kn": "ಕಳಪೆ AQI — ಸಂವೇದನಾಶೀಲ ಗುಂಪುಗಳಿಗೆ ಅಧಿಕ ಅಪಾಯ. ಮಕ್ಕಳು, ವೃದ್ಧರು ಮತ್ತು ಉಸಿರಾಟದ ರೋಗಿಗಳು ಮನೆಯೊಳಗೇ ಇರಬೇಕು. ಕಿಟಕಿ ಮುಚ್ಚಿ, ಏರ್ ಪ್ಯೂರಿಫೈಯರ್ ಬಳಸಿ.",
-                "hi": "खराब AQI — संवेदनशील समूहों के लिए उच्च जोखिम। बच्चों, बुजुर्गों और श्वसन रोगियों को घर के अंदर रहना चाहिए। खिड़कियां बंद रखें और उपलब्ध होने पर एयर प्यूरिफायर का उपयोग करें।"
-            }
+            "general": band(
+                "Poor air quality. Avoid prolonged outdoor activities. Use N95/FFP2 mask if going outside.",
+                "Kharab vayu gunvatta. N95/FFP2 mask upayog karen.",
+                "Kharab haveci gunavatta. N95/FFP2 mask vapra."
+            ),
+            "sensitive": band(
+                "Poor AQI - HIGH RISK. Children, elderly, and respiratory patients should stay indoors. Close windows and use air purifiers if available.",
+                "Kharab AQI - Uchch jokhim. Bachche, buzurg aur shvaas rogi andar rahen. Khidkiyan band karen.",
+                "Kharab AQI - Uchch dhoka. Mule, vruddh ani shvasrogini gharat raha. Khidkya band theva."
+            ),
         },
         "Very Poor": {
-            "general": {
-                "en": "Very Poor air quality. Avoid all unnecessary outdoor exposure. Wear N95 mask. Keep windows closed.",
-                "kn": "ಅತ್ಯಂತ ಕಳಪೆ ಗಾಳಿ ಗುಣಮಟ್ಟ. ಎಲ್ಲಾ ಅನಗತ್ಯ ಹೊರಾಂಗಣ ಮಾನ್ಯತೆ ತಪ್ಪಿಸಿ. N95 ಮಾಸ್ಕ್ ಧರಿಸಿ. ಕಿಟಕಿಗಳನ್ನು ಮುಚ್ಚಿ ಇಡಿ.",
-                "hi": "बहुत खराब वायु गुणवत्ता। सभी अनावश्यक बाहरी संपर्क से बचें। N95 मास्क पहनें। खिड़कियां बंद रखें।"
-            },
-            "sensitive": {
-                "en": "VERY POOR AQI — SEVERE RISK. Sensitive groups must stay indoors. Seek medical attention if experiencing breathing difficulty, chest pain, or eye irritation.",
-                "kn": "ಅತ್ಯಂತ ಕಳಪೆ AQI — ತೀವ್ರ ಅಪಾಯ. ಸಂವೇದನಾಶೀಲ ಗುಂಪುಗಳು ಒಳಗಡೆ ಇರಲೇಬೇಕು. ಉಸಿರಾಟ ತೊಂದರೆ, ಎದೆ ನೋವು ಅಥವಾ ಕಣ್ಣು ಉರಿ ಇದ್ದರೆ ವೈದ್ಯಕೀಯ ಸಹಾಯ ಪಡೆಯಿರಿ.",
-                "hi": "बहुत खराब AQI — गंभीर जोखिम। संवेदनशील समूहों को घर के अंदर रहना ही होगा। सांस लेने में कठिनाई, सीने में दर्द या आंखों में जलन होने पर तुरंत चिकित्सा सहायता लें।"
-            }
+            "general": band(
+                "Very Poor air quality. Avoid all unnecessary outdoor exposure. Wear N95 mask. Keep windows closed.",
+                "Bahut kharab vayu gunvatta. N95 mask pahnen. Khidkiyan band rakhen.",
+                "Atyant kharab haveci gunavatta. N95 mask ghala. Khidkya band theva."
+            ),
+            "sensitive": band(
+                "VERY POOR AQI - SEVERE RISK. Sensitive groups must stay indoors. Seek medical attention if breathing difficulty, chest pain, or eye irritation.",
+                "Bahut kharab AQI - Gambhir jokhim. Samvedanshil log andar rahen. Chikitsa len.",
+                "Atyant kharab AQI - Tivra dhoka. Samvedanshil gat gharat raha. Vaidyakiy madad ghya."
+            ),
         },
         "Severe": {
-            "general": {
-                "en": "SEVERE air quality — health emergency. Stay indoors. Avoid all outdoor activity. Authorities may issue public health directives.",
-                "kn": "ತೀವ್ರ ಗಾಳಿ ಗುಣಮಟ್ಟ — ಆರೋಗ್ಯ ತುರ್ತು ಪರಿಸ್ಥಿತಿ. ಒಳಗಡೆ ಇರಿ. ಎಲ್ಲಾ ಹೊರಾಂಗಣ ಚಟುವಟಿಕೆ ತಪ್ಪಿಸಿ. ಅಧಿಕಾರಿಗಳು ಸಾರ್ವಜನಿಕ ಆರೋಗ್ಯ ನಿರ್ದೇಶನ ನೀಡಬಹುದು.",
-                "hi": "गंभीर वायु गुणवत्ता — स्वास्थ्य आपातकाल। घर के अंदर रहें। सभी बाहरी गतिविधियों से बचें। अधिकारी सार्वजनिक स्वास्थ्य निर्देश जारी कर सकते हैं।"
-            },
-            "sensitive": {
-                "en": "SEVERE AQI — HEALTH EMERGENCY for sensitive groups. Do not go outside under any circumstances. If indoors air quality is poor, relocate to a clean-air shelter. Call emergency services if symptoms worsen.",
-                "kn": "ತೀವ್ರ AQI — ಸಂವೇದನಾಶೀಲ ಗುಂಪುಗಳಿಗೆ ಆರೋಗ್ಯ ತುರ್ತು. ಯಾವುದೇ ಕಾರಣಕ್ಕೂ ಹೊರಗೆ ಹೋಗಬೇಡಿ. ರೋಗಲಕ್ಷಣ ಹೆಚ್ಚಾದರೆ ತುರ್ತು ಸೇವೆ ಕರೆಯಿರಿ.",
-                "hi": "गंभीर AQI — संवेदनशील समूहों के लिए स्वास्थ्य आपातकाल। किसी भी परिस्थिति में बाहर न जाएं। लक्षण बिगड़ने पर आपातकालीन सेवाओं को कॉल करें।"
-            }
-        }
+            "general": band(
+                "SEVERE air quality - health emergency. Stay indoors. Avoid all outdoor activity. Authorities may issue public health directives.",
+                "Gambhir vayu gunvatta - swasthya apatkal. Andar rahen. Adhikari nirdesh jari kar sakte hain.",
+                "Gambhir haveci gunavatta - arogya apatkalin sthiti. Gharat raha. Adhikari nirdesh jari karu shaktat."
+            ),
+            "sensitive": band(
+                "SEVERE AQI - HEALTH EMERGENCY. Do not go outside under any circumstances. Call emergency services if symptoms worsen.",
+                "Gambhir AQI - Swasthya apatkal. Kabhi bhi bahar na jaen. Lakshan bigdne par apatkalin seva ko call karen.",
+                "Gambhir AQI - Arogya apatkalin sthiti. Konitatyahi paristhitit baher jayu naka. Laksane bigadlyas apatkalin seva kola kara."
+            ),
+        },
     }
 
     translation_confidence = {
-        "en": "native — authoritative",
-        "kn": "included for multilingual demo completeness — Delhi's primary official languages are Hindi and English. Kannada advisory text is retained from the original advisory set.",
-        "hi": "reviewed — Hindi verified against CPCB official advisory language. Flag: 'संतोषजनक' for Satisfactory is the CPCB-standard term. Hindi is the primary local language for Delhi and is the most operationally relevant translation here."
+        "en": "native - authoritative",
+        "hi": "Hindi is the primary official language for Delhi, Ghaziabad, and Noida. Reviewed against CPCB advisory language.",
     }
+    if use_marathi:
+        translation_confidence["mr"] = "Marathi is the primary regional language for Mumbai (Maharashtra). Transliterated standard written Marathi."
+
+    langs = ["en", "hi"] + (["mr"] if use_marathi else [])
 
     if hex_id:
-        latest_df = get_latest_data()
-        row = latest_df[latest_df['h3_hex'] == hex_id]
+        latest_df = get_latest_data_for(city_key)
+        row = latest_df[latest_df["h3_hex"] == hex_id]
         if row.empty:
             raise HTTPException(status_code=404, detail="Hex not found.")
-        aqi_val = float(row.iloc[0]['pollutant_avg'])
-        band, _ = get_cpcb_band(aqi_val)
+        aqi_val = float(row.iloc[0]["pollutant_avg"])
+        band_name, _ = get_cpcb_band(aqi_val)
         return {
             "hex_id": hex_id,
-            "zone_label": hex_zone_label(hex_id),
-            "current_band": band,
+            "zone_label": hex_zone_label_for(city_key, hex_id),
+            "city": city_key,
+            "current_band": band_name,
             "current_aqi": round(aqi_val, 1),
-            "advisory": ADVISORIES.get(band, {}),
-            "translation_confidence": translation_confidence
+            "languages": langs,
+            "advisory": ADVISORIES.get(band_name, {}),
+            "translation_confidence": translation_confidence,
         }
 
     return {
         "advisories": ADVISORIES,
-        "translation_confidence": translation_confidence
+        "city": city_key,
+        "languages": langs,
+        "translation_confidence": translation_confidence,
+        "language_note": (
+            "Delhi/Ghaziabad/Noida: English + Hindi. "
+            "Mumbai: English + Hindi + Marathi. "
+            "Kannada removed - does not correspond to any city in this system."
+        ),
     }
+
 
 
 @app.get("/source-attribution")
