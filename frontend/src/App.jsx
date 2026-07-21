@@ -10,6 +10,7 @@ import HexPopup from './HexPopup';
 import RecommendationsPanel from './RecommendationsPanel';
 import CityComparison from './CityComparison';
 import FeatureTour from './FeatureTour';
+import BusinessImpact from './BusinessImpact';
 import './index.css';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -261,6 +262,7 @@ function App() {
         {showComparison && (
           <CityComparison onSelectCity={handleCitySelect} activeCity={activeCity} />
         )}
+        <BusinessImpact />
       </div>
 
       {/* Map */}

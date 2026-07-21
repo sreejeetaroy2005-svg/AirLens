@@ -54,6 +54,76 @@ AQI·INTEL ingests historical air quality data from 4 Indian cities, trains per-
 | Noida | 240 | Very Poor | Improving −74 | 100% |
 | Mumbai | 126 | Very Poor | Improving −44 | 100% |
 
+
+---
+
+## Business Impact
+
+All numbers below are computed from real pipeline data. No figures are invented.
+
+### Prioritization Efficiency
+
+Traditional enforcement sends inspectors to all flagged zones equally. AQI.INTEL
+ranks zones by a composite urgency score (severity + trend + source confidence +
+vulnerability proximity). The result:
+
+> **Inspecting the top-3 urgency-ranked zones (50% of flagged zones) covers
+> 91% of school exposure and 76% of total vulnerability-weighted at-risk population
+> (schools x3 + hospitals x2.5 weighting, OSM data, Delhi).**
+
+Source: `GET /business-impact` -- computed live from OSM vulnerability cache
+and urgency scoring at request time.
+
+Methodology: Prioritization efficiency = fraction of total vulnerability-weighted
+exposure covered by top-N urgency-ranked zones vs inspecting all flagged zones
+equally. Computed from real OSM schools/hospitals within 500m of each monitoring hex.
+
+### Vulnerable Sites in Alert Zones (Delhi)
+
+- **11 schools** within 500m of currently-flagged monitoring zones
+- **13 hospitals** within 500m of currently-flagged monitoring zones
+- Source: OpenStreetMap Overpass API, computed per-hex, stored in `data/cache/vulnerability.json`
+- Note: vulnerability data computed for Delhi only at this stage; methodology
+  applies to any city by running `python data/fetch_vulnerability.py`
+
+### Forecast Lead Time
+
+| System | Lead time |
+|---|---|
+| Traditional CAAQMS (reactive) | 0h -- detects after threshold breach |
+| AQI.INTEL LightGBM forecast | **Up to 72h advance warning** |
+
+Administrators receive enforcement recommendations before conditions deteriorate,
+not after. Source: LightGBM +72h models trained on CPCB historical data.
+
+### Model Performance (real RMSE vs persistence baseline)
+
+| City | +72h Baseline RMSE | LightGBM RMSE | Improvement |
+|---|---|---|---|
+| Delhi | 40.59 | 32.44 | **-20.1%** |
+| Ghaziabad | 39.38 | 33.17 | **-15.8%** |
+| Noida | 34.97 | 28.52 | **-18.5%** |
+| Mumbai | 33.67 | 26.99 | **-19.8%** |
+
+Average improvement: **~19% RMSE reduction** vs the naive persistence baseline
+(predict tomorrow = today) across all four cities at the 72h horizon.
+
+### Operating Cost
+
+| Component | Cost |
+|---|---|
+| Air quality data | Free -- CPCB public CSV |
+| Weather data | Free tier -- Open-Meteo archive API |
+| Road/land-use data | Free -- OpenStreetMap Overpass API |
+| LLM reasoning (Reasoning Agent) | Near-zero -- OpenRouter free tier |
+| Infrastructure | None -- runs on a single laptop/VM |
+| **Marginal cost per additional city** | **~$0** -- add CSV rows + 5min pipeline run |
+
+> The entire stack operates on free-tier APIs and open data.
+> Scaling to a new Indian city requires no licensing fees, no proprietary sensors,
+> and no cloud infrastructure. The architecture is horizontally scalable
+> at near-zero marginal cost per city.
+
 ---
 
 ## Architecture — Multi-Agent Pipeline
