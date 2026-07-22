@@ -41,10 +41,13 @@ function StatBlock({ value, unit, label, sub, color = 'var(--accent)' }) {
   );
 }
 
-export default function BusinessImpact() {
+export default function BusinessImpact({ open: controlledOpen, onToggle: controlledOnToggle }) {
   const [data, setData]     = useState(null);
-  const [open, setOpen]     = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const handleToggle = controlledOnToggle || (() => setInternalOpen(o => !o));
 
   useEffect(() => {
     if (!open || data) return;
@@ -53,14 +56,14 @@ export default function BusinessImpact() {
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [open]);
+  }, [open, data]);
 
   return (
     <div className="panel business-impact-panel" id="tour-business-impact" style={{ padding: '14px' }}>
       {/* Header — always visible, click to expand */}
       <div
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
-        onClick={() => setOpen(o => !o)}
+        onClick={handleToggle}
       >
         <div className="panel-label" style={{ marginBottom: 0 }}>
           📊 Business Impact

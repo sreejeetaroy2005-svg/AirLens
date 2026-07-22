@@ -131,7 +131,7 @@ function ConfidenceMeter({ traffic, industrial, construction }) {
 let _seq = 1000;
 function nextSeq() { return ++_seq; }
 
-export default function RecommendationsPanel({ onSelectHex, activeCity }) {
+export default function RecommendationsPanel({ onSelectHex, activeCity, open, onToggle }) {
   const [data, setData]           = useState(null);
   const [loading, setLoading]     = useState(true);
   const [expanded, setExpanded]   = useState(null);
@@ -141,7 +141,7 @@ export default function RecommendationsPanel({ onSelectHex, activeCity }) {
     setLoading(true);
     setExpanded(null);
     setExplain({});
-    const cityParam = activeCity && activeCity !== 'Delhi' ? `?city=${activeCity}` : '';
+    const cityParam = activeCity ? `?city=${activeCity}` : '';
     fetch(`${API_BASE}/recommendations${cityParam}`)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
@@ -167,16 +167,29 @@ export default function RecommendationsPanel({ onSelectHex, activeCity }) {
 
   return (
     <div className="rec-panel panel">
-      <div className="rec-header">
-        <div className="panel-label">🏛 Enforcement Log</div>
-        <span className="rec-count">{items.length}</span>
+      <div
+        className="rec-header"
+        style={{ cursor: onToggle ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+        onClick={onToggle}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="panel-label" style={{ marginBottom: 0 }}>🏛 Enforcement Log</div>
+          <span className="rec-count">{items.length}</span>
+        </div>
+        {onToggle && (
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>
+            {open ? '▲' : '▼'}
+          </span>
+        )}
       </div>
 
-      {loading ? (
-        <div className="rec-empty">FETCHING SIGNAL DATA…</div>
-      ) : !items.length ? (
-        <div className="rec-empty">CONDITIONS NOMINAL — NO ACTIONS REQUIRED ✓</div>
-      ) : (
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          {loading ? (
+            <div className="rec-empty">FETCHING SIGNAL DATA…</div>
+          ) : !items.length ? (
+            <div className="rec-empty">CONDITIONS NOMINAL — NO ACTIONS REQUIRED ✓</div>
+          ) : (
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {items.map((item, i) => {
             const meta   = PRIORITY_META[item.priority] || PRIORITY_META.LOW;
@@ -202,8 +215,7 @@ export default function RecommendationsPanel({ onSelectHex, activeCity }) {
                     setExpanded(next);
                     if (next !== null) {
                       // Trigger explanation fetch when card opens
-                      const cp = activeCity && activeCity !== 'Delhi' ? activeCity : null;
-                      fetchExplanation(item.h3_hex, cp);
+                      fetchExplanation(item.h3_hex, activeCity);
                     }
                   }}
                 >
@@ -410,6 +422,8 @@ export default function RecommendationsPanel({ onSelectHex, activeCity }) {
             );
           })}
         </ul>
+      )}
+        </div>
       )}
     </div>
   );

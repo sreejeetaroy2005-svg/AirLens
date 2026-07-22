@@ -44,7 +44,7 @@ function ConfBar({ value, color }) {
   );
 }
 
-export default function AlertsPanel({ compareData, srcLookup, onSelectHex }) {
+export default function AlertsPanel({ compareData, srcLookup, onSelectHex, open, onToggle }) {
   const alerts = useMemo(() => {
     if (!compareData?.length) return [];
     return compareData
@@ -65,14 +65,27 @@ export default function AlertsPanel({ compareData, srcLookup, onSelectHex }) {
 
   return (
     <div className="alerts-panel panel">
-      <div className="alerts-header">
-        <div className="panel-label">⚡ Signal Alerts</div>
-        <span className="alerts-count">{alerts.length}</span>
+      <div
+        className="alerts-header"
+        style={{ cursor: onToggle ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+        onClick={onToggle}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="panel-label" style={{ marginBottom: 0 }}>⚡ Signal Alerts</div>
+          <span className="alerts-count">{alerts.length}</span>
+        </div>
+        {onToggle && (
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>
+            {open ? '▲' : '▼'}
+          </span>
+        )}
       </div>
 
-      {!alerts.length ? (
-        <div className="rec-empty">NO BAND CROSSINGS DETECTED — STABLE ✓</div>
-      ) : (
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          {!alerts.length ? (
+            <div className="rec-empty">NO BAND CROSSINGS DETECTED — STABLE ✓</div>
+          ) : (
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {alerts.map((a, i) => {
             const src = srcLookup?.[a.h3_hex] || {};
@@ -136,6 +149,8 @@ export default function AlertsPanel({ compareData, srcLookup, onSelectHex }) {
             );
           })}
         </ul>
+      )}
+        </div>
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import DeckGL from '@deck.gl/react';
+// DeckGL import removed — using MapboxOverlay pattern instead
 import { GeoJsonLayer } from '@deck.gl/layers';
 import { FlyToInterpolator } from '@deck.gl/core';
 import maplibregl from 'maplibre-gl';
@@ -146,7 +146,22 @@ function App() {
       .then(r => r.json()).then(setCompareData)
       .catch(e => console.error('Forecast-compare fetch failed:', e));
 
-
+    // Attribution accuracy — Delhi only (endpoint only has Delhi ground truth)
+    if (activeCity === 'Delhi') {
+      setAccuracy(null);
+      fetch(`${API_BASE}/source-attribution-accuracy?city=Delhi`)
+        .then(r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        })
+        .then(d => setAccuracy(d))
+        .catch(e => {
+          console.error('Accuracy fetch failed:', e);
+          setAccuracy(null);
+        });
+    } else {
+      setAccuracy(null);
+    }
   }, [activeCity]);
 
   // ─── Source lookup ──────────────────────────────────────────────────────────
@@ -611,64 +626,27 @@ function App() {
           </div>
 
           {/* 2. Signal Alerts */}
-          <div className="panel-box">
-            <div
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
-              onClick={() => togglePanel('alerts')}
-            >
-              <div className="panel-label" style={{ marginBottom: 0 }}>
-                ⚡ Signal Alerts
-              </div>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>
-                {panelsOpen.alerts ? '▲' : '▼'}
-              </span>
-            </div>
-            {panelsOpen.alerts && (
-              <div style={{ marginTop: 12 }}>
-                <AlertsPanel compareData={compareData} srcLookup={srcLookup} onSelectHex={flyToHex} />
-              </div>
-            )}
-          </div>
+          <AlertsPanel
+            compareData={compareData}
+            srcLookup={srcLookup}
+            onSelectHex={flyToHex}
+            open={panelsOpen.alerts}
+            onToggle={() => togglePanel('alerts')}
+          />
 
           {/* 3. Enforcement Log (Recommendations) */}
-          <div className="panel-box">
-            <div
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
-              onClick={() => togglePanel('recommendations')}
-            >
-              <div className="panel-label" style={{ marginBottom: 0 }}>
-                🏛 Enforcement Log
-              </div>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>
-                {panelsOpen.recommendations ? '▲' : '▼'}
-              </span>
-            </div>
-            {panelsOpen.recommendations && (
-              <div style={{ marginTop: 12 }}>
-                <RecommendationsPanel onSelectHex={flyToHex} activeCity={activeCity} />
-              </div>
-            )}
-          </div>
+          <RecommendationsPanel
+            onSelectHex={flyToHex}
+            activeCity={activeCity}
+            open={panelsOpen.recommendations}
+            onToggle={() => togglePanel('recommendations')}
+          />
 
           {/* 4. Business Impact */}
-          <div className="panel-box">
-            <div
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
-              onClick={() => togglePanel('businessImpact')}
-            >
-              <div className="panel-label" style={{ marginBottom: 0 }}>
-                📊 Business Impact
-              </div>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>
-                {panelsOpen.businessImpact ? '▲' : '▼'}
-              </span>
-            </div>
-            {panelsOpen.businessImpact && (
-              <div style={{ marginTop: 12 }}>
-                <BusinessImpact />
-              </div>
-            )}
-          </div>
+          <BusinessImpact
+            open={panelsOpen.businessImpact}
+            onToggle={() => togglePanel('businessImpact')}
+          />
 
           {/* 5. Model Performance & 6. Attribution Accuracy */}
           <div className="panel-box" id="tour-model-stats">
@@ -686,20 +664,6 @@ function App() {
 
             {panelsOpen.modelPerformance && (
               <div style={{ marginTop: 12 }}>
-                <div style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.58rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.14em',
-                  textTransform: 'uppercase',
-                  color: 'var(--text-dim)',
-                  borderBottom: '1px solid var(--border-dim)',
-                  paddingBottom: 7,
-                  marginBottom: 8,
-                }}>
-                  Model Performance
-                </div>
-
                 <div className="stats-row">
                   <span>Persistence RMSE</span>
                   <span className="stats-val" style={{ color: '#ef4444' }}>40.59</span>
@@ -780,7 +744,7 @@ function App() {
               onClick={() => togglePanel('aqiScale')}
             >
               <div className="panel-label" style={{ marginBottom: 0 }}>
-                🎨 AQI Scale
+                🎨 CPCB AQI Scale
               </div>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>
                 {panelsOpen.aqiScale ? '▲' : '▼'}
@@ -788,21 +752,18 @@ function App() {
             </div>
             {panelsOpen.aqiScale && (
               <div style={{ marginTop: 12 }}>
-                <div className="control-group">
-                  <h2>CPCB AQI Scale</h2>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                    {LEGEND.map(({ band, color }) => (
-                      <div key={band} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{
-                          width: 10, height: 10,
-                          background: color,
-                          flexShrink: 0,
-                          clipPath: 'polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)',
-                        }} />
-                        <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.74rem', color: 'var(--text-secondary)' }}>{band}</span>
-                      </div>
-                    ))}
-                  </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {LEGEND.map(({ band, color }) => (
+                    <div key={band} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{
+                        width: 10, height: 10,
+                        background: color,
+                        flexShrink: 0,
+                        clipPath: 'polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)',
+                      }} />
+                      <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.74rem', color: 'var(--text-secondary)' }}>{band}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

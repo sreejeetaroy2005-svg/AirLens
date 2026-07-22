@@ -37,6 +37,17 @@ def _load_dotenv():
 
 _load_dotenv()
 
+# Log key presence at startup (without revealing secrets)
+_openrouter_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+_gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+
+if _openrouter_key:
+    print(f"[AQI.INTEL Reasoning Agent] Detected OPENROUTER_API_KEY (len: {len(_openrouter_key)} chars).")
+elif _gemini_key:
+    print(f"[AQI.INTEL Reasoning Agent] Detected GEMINI_API_KEY (len: {len(_gemini_key)} chars).")
+else:
+    print("[AQI.INTEL Reasoning Agent] No LLM API key detected. Using deterministic fallback.")
+
 # ---------------------------------------------------------------------------
 # Gemini SDK (lazy)
 # ---------------------------------------------------------------------------
@@ -53,7 +64,8 @@ def _get_gemini():
         from google import genai
         _gemini_client = genai.Client(api_key=api_key)
         return _gemini_client
-    except Exception:
+    except Exception as e:
+        print(f"[AQI.INTEL Reasoning Agent] Gemini client init failed: {e}")
         return None
 
 # ---------------------------------------------------------------------------
@@ -126,8 +138,8 @@ def _build_prompt(rec, rank, total):
 # OpenRouter call (OpenAI-compatible endpoint)
 # ---------------------------------------------------------------------------
 def _call_openrouter(prompt):
-    MODEL = "google/gemini-2.5-flash"
-    api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    MODEL   = "google/gemini-2.5-flash"
+    api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     payload = {
         "model": MODEL,
         "messages": [
@@ -147,7 +159,16 @@ def _call_openrouter(prompt):
         "https://openrouter.ai/api/v1/chat/completions",
         headers=headers, json=payload, timeout=20,
     )
-    r.raise_for_status()
+    if not r.ok:
+        # Surface exact HTTP error so it's visible in server logs
+        try:
+            body = r.json()
+            msg  = body.get("error", {}).get("message", r.text[:200])
+        except Exception:
+            msg = r.text[:200]
+        raise RuntimeError(
+            "OpenRouter API error: {} {} -- {}".format(r.status_code, r.reason, msg)
+        )
     text = r.json()["choices"][0]["message"]["content"].strip()
     text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
     text = re.sub(r'^#+\s+', '', text, flags=re.M)
@@ -245,7 +266,7 @@ def generate_explanation(rec, rank, total):
     prompt = _build_prompt(rec, rank, total)
 
     # 1. OpenRouter
-    if os.environ.get("OPENROUTER_API_KEY", ""):
+    if os.environ.get("OPENROUTER_API_KEY", "").strip():
         try:
             text = _call_openrouter(prompt)
             return {
@@ -254,11 +275,13 @@ def generate_explanation(rec, rank, total):
                 "model": "google/gemini-2.5-flash",
                 "note": None,
             }
-        except Exception:
-            pass
+        except Exception as e:
+            err_msg = str(e)
+            print("[AQI.INTEL Reasoning Agent] {}".format(err_msg))
+            _last_error = err_msg  # pass through to note if all methods fail
 
     # 2. Gemini SDK
-    if os.environ.get("GEMINI_API_KEY", ""):
+    if os.environ.get("GEMINI_API_KEY", "").strip():
         try:
             text = _call_gemini(prompt)
             return {
@@ -267,13 +290,22 @@ def generate_explanation(rec, rank, total):
                 "model": "gemini-2.0-flash",
                 "note": None,
             }
-        except Exception:
-            pass
+        except Exception as e:
+            err_msg = str(e)
+            print("[AQI.INTEL Reasoning Agent] Gemini SDK call failed: {}".format(err_msg))
 
     # 3. Deterministic fallback
+    # Determine why we fell back, for the note field
+    has_or  = bool(os.environ.get("OPENROUTER_API_KEY", "").strip())
+    has_gm  = bool(os.environ.get("GEMINI_API_KEY", "").strip())
+    if has_or or has_gm:
+        note = "LLM call failed -- using deterministic fallback. Check server logs for details."
+    else:
+        note = "Set OPENROUTER_API_KEY or GEMINI_API_KEY in .env to enable LLM reasoning."
+
     return {
         "explanation": _deterministic_explanation(rec, rank, total),
         "method": "deterministic-fallback",
         "model": "template",
-        "note": "Set OPENROUTER_API_KEY or GEMINI_API_KEY in .env to enable LLM reasoning.",
+        "note": note,
     }
