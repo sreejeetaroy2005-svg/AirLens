@@ -209,8 +209,8 @@ export default function RecommendationsPanel({ onSelectHex, activeCity }) {
                 >
                   {/* Log ID */}
                   <span style={{
-                    fontFamily: 'var(--font-mono)', fontSize: '0.52rem',
-                    color: 'var(--text-dim)', letterSpacing: '0.06em',
+                    fontFamily: 'var(--font-mono)', fontSize: '0.58rem',
+                    color: 'var(--text-secondary)', letterSpacing: '0.06em',
                     flexShrink: 0, paddingTop: 2,
                   }}>#{item._logId}</span>
 

@@ -56,7 +56,7 @@ export default function BusinessImpact() {
   }, [open]);
 
   return (
-    <div className="panel" style={{ padding: '14px' }}>
+    <div className="panel business-impact-panel" id="tour-business-impact" style={{ padding: '14px' }}>
       {/* Header — always visible, click to expand */}
       <div
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}

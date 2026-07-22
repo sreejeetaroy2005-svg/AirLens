@@ -89,7 +89,7 @@ export default function AlertsPanel({ compareData, srcLookup, onSelectHex }) {
                   <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                     {a.label}
                   </span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.58rem', color: 'var(--text-dim)', letterSpacing: '0.06em' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-secondary)', letterSpacing: '0.06em' }}>
                     T-{DEMO_TIMES[i] || '01:00'}
                   </span>
                 </div>
@@ -99,24 +99,24 @@ export default function AlertsPanel({ compareData, srcLookup, onSelectHex }) {
                   <span style={{
                     fontFamily: 'var(--font-mono)',
                     background: BAND_COLOR[a.current_band] + '22',
-                    border: `1px solid ${BAND_COLOR[a.current_band]}55`,
+                    border: `1px solid ${BAND_COLOR[a.current_band]}77`,
                     color: BAND_COLOR[a.current_band],
                     padding: '1px 6px', borderRadius: 2,
                     fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
                   }}>{a.current_band}</span>
 
-                  <span style={{ color: 'var(--text-dim)', fontSize: '0.65rem' }}>→</span>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.65rem' }}>→</span>
 
                   <span style={{
                     fontFamily: 'var(--font-mono)',
                     background: BAND_COLOR[a.forecast_24h_band] + '22',
-                    border: `1px solid ${BAND_COLOR[a.forecast_24h_band]}55`,
+                    border: `1px solid ${BAND_COLOR[a.forecast_24h_band]}77`,
                     color: BAND_COLOR[a.forecast_24h_band],
                     padding: '1px 6px', borderRadius: 2,
                     fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
                   }}>{a.forecast_24h_band}</span>
 
-                  <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>
+                  <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-secondary)' }}>
                     {a.current_aqi.toFixed(0)} → {a.forecast_24h_aqi.toFixed(0)}
                   </span>
                 </div>
@@ -127,7 +127,7 @@ export default function AlertsPanel({ compareData, srcLookup, onSelectHex }) {
                     <ConfBar value={src.traffic_confidence}      color="#fbbf24" />
                     <ConfBar value={src.industrial_confidence}   color="#a78bfa" />
                     <ConfBar value={src.construction_confidence} color="#34d399" />
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--text-dim)', marginLeft: 'auto', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.58rem', color: 'var(--text-secondary)', marginLeft: 'auto', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                       {src.dominant_source}
                     </span>
                   </div>

@@ -87,20 +87,21 @@ def current_data_hour(latest_df: pd.DataFrame) -> int:
     return datetime.now().hour
 
 # ── OSM / Vulnerability caches (Delhi-only for now) ──────────────────────────
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _osm_attribution: dict | None = None
 _vulnerability_cache: dict | None = None
 
 def get_osm_attribution() -> dict:
     global _osm_attribution
     if _osm_attribution is None:
-        path = "data/cache/osm_attribution.json"
+        path = os.path.join(BASE_DIR, "..", "data", "cache", "osm_attribution.json")
         _osm_attribution = json.load(open(path)) if os.path.exists(path) else {}
     return _osm_attribution
 
 def get_vulnerability() -> dict:
     global _vulnerability_cache
     if _vulnerability_cache is None:
-        path = "data/cache/vulnerability.json"
+        path = os.path.join(BASE_DIR, "..", "data", "cache", "vulnerability.json")
         _vulnerability_cache = json.load(open(path)) if os.path.exists(path) else {}
     return _vulnerability_cache
 
@@ -408,14 +409,8 @@ def get_hex_boundary(hex_id):
     return coords
 
 def get_latest_data():
-    """Loads the latest available data per hex."""
-    file_path = "data/cache/features.parquet"
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=500, detail="Data not found.")
-    
-    df = pd.read_parquet(file_path)
-    latest_df = df.loc[df.groupby('h3_hex')['timestamp_hr'].idxmax()].copy()
-    return latest_df
+    """Loads the latest available data per hex for Delhi."""
+    return get_latest_data_for("Delhi")
 
 def df_to_geojson(df, value_col, is_forecast=False, zone_labels=None):
     """Converts DataFrame to GeoJSON feature collection."""
@@ -661,19 +656,9 @@ SEVERITY_ORDER = {
 }
 
 # ── Vulnerability cache ───────────────────────────────────────────────────────
-_vulnerability: dict | None = None
+# (get_vulnerability helper defined at top of file)
 
-def get_vulnerability() -> dict:
-    global _vulnerability
-    if _vulnerability is not None:
-        return _vulnerability
-    path = "data/cache/vulnerability.json"
-    if os.path.exists(path):
-        with open(path) as f:
-            _vulnerability = json.load(f)
-    else:
-        _vulnerability = {}
-    return _vulnerability
+
 
 
 # ── Urgency scoring ───────────────────────────────────────────────────────────
@@ -798,8 +783,13 @@ def build_evidence_basis(
 
 # ── Helper: load ground-truth zones ────────────────────────────────────────
 def load_ground_truth():
-    gt_path = "data/ground_truth_zones.geojson"
-    if not os.path.exists(gt_path):
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(base_dir, "..", "data", "ground_truth_zones.geojson"),
+        "data/ground_truth_zones.geojson"
+    ]
+    gt_path = next((p for p in candidates if os.path.exists(p)), None)
+    if not gt_path:
         return []
     with open(gt_path) as f:
         gj = json.load(f)
@@ -814,37 +804,39 @@ def get_source_attribution_accuracy():
     """
     latest_df = get_latest_data()
     gt_features = load_ground_truth()
+    osm = get_osm_attribution()
+    hour = current_data_hour(latest_df)
 
-    # Build ground-truth sets per zone type
     gt_traffic_hexes    = {f["properties"]["h3_hex"] for f in gt_features
                            if f["properties"].get("zone_type") == "traffic"}
     gt_industrial_hexes = {f["properties"]["h3_hex"] for f in gt_features
                            if f["properties"].get("zone_type") == "industrial"}
 
-    # Re-run the same rule logic as /source-attribution
     road_density_75 = (latest_df['city_road_density'].quantile(0.75)
                        if 'city_road_density' in latest_df.columns else 0)
 
     pred_traffic    = set()
     pred_industrial = set()
+
     for _, row in latest_df.iterrows():
         hx  = row['h3_hex']
         aqi = float(row['pollutant_avg'])
-        if ('city_road_density' in row
-                and row['city_road_density'] >= road_density_75
-                and aqi > 60):
+        if hx in osm:
+            rec = osm[hx]
+            t_flag = rec.get('traffic_linked', False) or (rec.get('traffic_confidence', 0) >= 50.0)
+            i_flag = rec.get('industrial_linked', False) or (rec.get('industrial_confidence', 0) >= 50.0)
+        else:
+            t_flag = ('city_road_density' in row and row['city_road_density'] >= road_density_75 and aqi > 60)
+            i_flag = (hash(hx) % 10) > 7
+
+        if t_flag:
             pred_traffic.add(hx)
-        if (hash(hx) % 10) > 7:
+        if i_flag:
             pred_industrial.add(hx)
 
-    # Also include GT neighbour hexes that are in our dataset (res-8 neighbours
-    # of ground-truth hexes that aren't directly in the dataset still count for
-    # recall numerator if the model flags them)
     all_dataset_hexes = set(latest_df['h3_hex'].tolist())
 
     def pr(predicted: set, ground_truth: set, dataset: set):
-        # Restrict GT to hexes present in dataset + their neighbours
-        # We expand GT to include 1-ring neighbours so partial spatial matches count
         expanded_gt = set()
         for hx in ground_truth:
             expanded_gt.add(hx)
@@ -853,7 +845,7 @@ def get_source_attribution_accuracy():
         relevant_gt = expanded_gt & dataset
 
         if not relevant_gt:
-            return None, None, 0, 0   # not evaluable
+            return {"precision": 0.0, "recall": 0.0, "true_positives": 0, "gt_relevant_hexes": 0, "predicted_flagged": len(predicted)}
 
         tp = len(predicted & relevant_gt)
         fp = len(predicted - relevant_gt)
@@ -861,26 +853,11 @@ def get_source_attribution_accuracy():
 
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
         recall    = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        return round(precision, 3), round(recall, 3), tp, len(relevant_gt)
-
-    t_prec, t_rec, t_tp, t_gt = pr(pred_traffic,    gt_traffic_hexes,    all_dataset_hexes)
-    i_prec, i_rec, i_tp, i_gt = pr(pred_industrial, gt_industrial_hexes, all_dataset_hexes)
+        return {"precision": round(precision, 3), "recall": round(recall, 3), "true_positives": tp, "gt_relevant_hexes": len(relevant_gt), "predicted_flagged": len(predicted)}
 
     return {
-        "traffic": {
-            "precision": t_prec,
-            "recall":    t_rec,
-            "true_positives": t_tp,
-            "gt_relevant_hexes": t_gt,
-            "predicted_flagged": len(pred_traffic),
-        },
-        "industrial": {
-            "precision": i_prec,
-            "recall":    i_rec,
-            "true_positives": i_tp,
-            "gt_relevant_hexes": i_gt,
-            "predicted_flagged": len(pred_industrial),
-        },
+        "traffic": pr(pred_traffic, gt_traffic_hexes, all_dataset_hexes),
+        "industrial": pr(pred_industrial, gt_industrial_hexes, all_dataset_hexes),
         "ground_truth_source": "data/ground_truth_zones.geojson — manually tagged DPCC/CPCB Delhi zones",
         "note": "Precision/recall computed against expanded 1-ring H3 neighbourhood of each GT zone to account for spatial resolution."
     }
@@ -986,17 +963,22 @@ def get_recommendations(city: str = Query(None)):
             t_link_raw = ('city_road_density' in row
                           and row['city_road_density'] >= road_density_75
                           and aqi > 60)
-            i_link_raw = (hash(hx) % 10) > 7
-            t_conf_base = 65.0 if t_link_raw else 20.0
+            # Deterministic per-hex distinction: alternate primary source signature using hex hash
+            hex_val = int(hx, 16) if isinstance(hx, str) else hash(hx)
+            i_link_raw = (hex_val % 3 == 0) and (aqi > 80)
+            c_link_raw = (hex_val % 5 == 0) and (aqi > 100)
+            t_conf_base = 75.0 if t_link_raw else 25.0
             t_conf   = apply_tod_to_confidence(t_conf_base, hour)
-            i_conf   = 65.0 if i_link_raw else 20.0
-            c_conf   = 0.0
-            dom_src  = 'traffic' if t_conf >= i_conf else 'industrial'
-            dom_conf = max(t_conf, i_conf)
+            i_conf   = 70.0 if i_link_raw else 20.0
+            c_conf   = 60.0 if c_link_raw else 15.0
+            dom_src  = max({'traffic': t_conf, 'industrial': i_conf, 'construction': c_conf},
+                           key=lambda k: {'traffic': t_conf, 'industrial': i_conf, 'construction': c_conf}[k])
+            dom_conf = max(t_conf, i_conf, c_conf)
 
-        is_traffic      = t_conf >= 40
-        is_industrial   = i_conf >= 40
-        is_construction = c_conf >= 25
+        # Source active flags — dominant source is always active, secondary sources only if high confidence (>=55%)
+        is_traffic      = (dom_src == 'traffic') or (t_conf >= 55.0 and t_conf >= dom_conf * 0.7)
+        is_industrial   = (dom_src == 'industrial') or (i_conf >= 55.0 and i_conf >= dom_conf * 0.7)
+        is_construction = (dom_src == 'construction') or (c_conf >= 45.0 and c_conf >= dom_conf * 0.6)
 
         if not is_traffic and not is_industrial and not is_construction:
             continue

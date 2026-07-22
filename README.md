@@ -195,8 +195,8 @@ CSV (CPCB India Air Quality)
 ┌──────────────────────────────────────────────────────────────┐
 │  AGENT 6 — Advisory Agent                                    │
 │  backend/main.py:  GET /advisory                             │
-│  CPCB band → citizen-facing advisory in EN / HI / KN        │
-│  Two audience variants: general public + sensitive groups    │
+│  CPCB band → citizen advisory: EN+HI (Delhi/Gzb/Noida),    │
+│  EN+HI+MR (Mumbai). Two variants: general + sensitive.      │
 │  Output: multilingual health guidance (frontend banner)      │
 └──────────────────────────────────────────────────────────────┘
         │
@@ -210,7 +210,7 @@ frontend/src/  (React + Vite + Deck.gl)
     ├── HexPopup.jsx                ← sparkline + confidence bars
     ├── CityComparison.jsx          ← cross-city comparison table
     ├── AdvisoryBanner.jsx          ← multilingual citizen advisory
-    └── FeatureTour.jsx             ← 9-step guided demo walkthrough
+    └── FeatureTour.jsx             ← 11-step guided demo walkthrough
 ```
 
 > Each pipeline stage is independently runnable, has its own input/output contract,
@@ -313,7 +313,7 @@ All endpoints accept an optional `?city=` parameter (`Delhi` | `Ghaziabad` | `No
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/recommendations` | Urgency-ranked enforcement actions with composite score, evidence basis, vulnerability data |
-| GET | `/advisory` | Citizen advisories in EN/HI/KN per CPCB band |
+| GET | `/advisory` | Citizen advisories per CPCB band: EN+HI (Delhi/Ghaziabad/Noida), EN+HI+MR (Mumbai) |
 
 ### Multi-City
 
@@ -424,13 +424,13 @@ The system is explicit at every layer that traffic scores are structural proxies
 
 ### Scalability & Multi-City Expansion
 
-The system architecture is strictly **config-driven** via [`data/cities.py`](file:///c:/Users/SREEJEETA/OneDrive/Desktop/pollution_detection/data/cities.py). **No code changes** to core ingestion, feature engineering, model training, or API routing logic are required when expanding the system to cover new cities.
+The system architecture is strictly **config-driven** via [`data/cities.py`](data/cities.py). **No code changes** to core ingestion, feature engineering, model training, or API routing logic are required when expanding the system to cover new cities.
 
 #### Onboarding a 5th City (Step-by-Step)
 To add a 5th city (e.g., Bengaluru, Kolkata, or Chennai):
 
 1. **Verify Source Data**: Ensure sensor station records for the new city exist in the source CSV (`data/location_coords.csv` or raw station logs).
-2. **Add Entry to `CITY_REGISTRY`**: Open [`data/cities.py`](file:///c:/Users/SREEJEETA/OneDrive/Desktop/pollution_detection/data/cities.py) and append a new `CityConfig` entry without modifying core pipeline code:
+2. **Add Entry to `CITY_REGISTRY`**: Open [`data/cities.py`](data/cities.py) and append a new `CityConfig` entry without modifying core pipeline code:
    ```python
    CITY_REGISTRY["Bengaluru"] = CityConfig(
        name="Bengaluru",
@@ -464,7 +464,7 @@ To add a 5th city (e.g., Bengaluru, Kolkata, or Chennai):
 ## Project Structure
 
 ```
-pollution_detection/
+AirLens/
 ├── data/
 │   ├── cities.py                   # City registry (bbox, centre, H3 res)
 │   ├── config.py                   # Legacy Delhi config (kept for compat)
@@ -491,7 +491,7 @@ pollution_detection/
 │   ├── features.py                 # Feature engineering (used by legacy pipeline)
 │   └── train.py                    # Legacy single-city training script
 ├── backend/
-│   ├── main.py                     # FastAPI — 17 endpoints, all ?city= aware
+│   ├── main.py                     # FastAPI — 14 endpoints, all ?city= aware
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
@@ -557,7 +557,7 @@ pollution_detection/
 | Geospatial indexing | h3-py (resolution 8, configurable per city) |
 | ML Forecast | LightGBM (3 models per city: +24h, +48h, +72h) |
 | ML evaluation | scikit-learn RMSE vs persistence baseline |
-| Backend API | FastAPI + Uvicorn (17 endpoints) |
+| Backend API | FastAPI + Uvicorn (14 endpoints) |
 | Frontend map | React + Vite + Deck.gl (GeoJsonLayer) + MapLibre GL (CartoDB dark basemap) |
 | Fonts | JetBrains Mono (instrumentation numerics) + Inter (body) |
 | OSM data | Overpass API — highway classification, landuse, amenities |

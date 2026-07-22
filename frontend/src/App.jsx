@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import DeckGL from '@deck.gl/react';
-import { TileLayer } from '@deck.gl/geo-layers';
-import { BitmapLayer, GeoJsonLayer } from '@deck.gl/layers';
+import { GeoJsonLayer } from '@deck.gl/layers';
 import { FlyToInterpolator } from '@deck.gl/core';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { MapboxOverlay } from '@deck.gl/mapbox';
 import SummaryStrip from './SummaryStrip';
 import AlertsPanel from './AlertsPanel';
 import AdvisoryBanner from './AdvisoryBanner';
@@ -25,7 +27,7 @@ const INITIAL_VIEW_STATE = {
   transitionDuration: 0,
 };
 
-const CARTO_DARK_TILE = 'https://a.basemaps.cartocdn.com/dark_matter_nolabels/{z}/{x}/{y}@2x.png';
+const CARTO_DARK_TILE = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png';
 const API_BASE = 'http://localhost:8000';
 
 const LEGEND = [
@@ -70,6 +72,39 @@ function App() {
   const [showComparison, setShowComparison] = useState(false);
 
   const playIntervalRef = useRef(null);
+  const mapContainerRef = useRef(null);
+  const mapRef = useRef(null);
+  const overlayRef = useRef(null);
+
+  // Initialize MapLibre map and MapboxOverlay once
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+
+    const map = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+      center: [INITIAL_VIEW_STATE.longitude, INITIAL_VIEW_STATE.latitude],
+      zoom: INITIAL_VIEW_STATE.zoom,
+      pitch: INITIAL_VIEW_STATE.pitch,
+      bearing: INITIAL_VIEW_STATE.bearing,
+    });
+
+    const overlay = new MapboxOverlay({
+      layers: [],
+      getTooltip: (info) => getTooltip(info),
+      onClick: ({ object }) => { if (!object) setSelectedHex(null); }
+    });
+
+    map.addControl(overlay);
+    mapRef.current = map;
+    overlayRef.current = overlay;
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      overlayRef.current = null;
+    };
+  }, []);
 
   // ─── Play / Pause ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -111,14 +146,7 @@ function App() {
       .then(r => r.json()).then(setCompareData)
       .catch(e => console.error('Forecast-compare fetch failed:', e));
 
-    // Accuracy only meaningful for Delhi (has ground truth zones)
-    if (activeCity === 'Delhi') {
-      fetch(`${API_BASE}/source-attribution-accuracy`)
-        .then(r => r.json()).then(setAccuracy)
-        .catch(e => console.error('Accuracy fetch failed:', e));
-    } else {
-      setAccuracy(null);
-    }
+
   }, [activeCity]);
 
   // ─── Source lookup ──────────────────────────────────────────────────────────
@@ -153,39 +181,80 @@ function App() {
     }));
   }, []);
 
+  // ─── Auto-fit viewState to monitored hexes when geoData loads ────────────
+  useEffect(() => {
+    if (!geoData?.features?.length) return;
+    let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
+    geoData.features.forEach(f => {
+      const coords = f.geometry?.coordinates?.[0];
+      if (coords) {
+        coords.forEach(([lon, lat]) => {
+          if (lat < minLat) minLat = lat;
+          if (lat > maxLat) maxLat = lat;
+          if (lon < minLon) minLon = lon;
+          if (lon > maxLon) maxLon = lon;
+        });
+      }
+    });
+    if (minLat < maxLat && minLon < maxLon) {
+      const centerLat = (minLat + maxLat) / 2;
+      const centerLon = (minLon + maxLon) / 2;
+      // Calculate appropriate zoom based on lat/lon span
+      const latDiff = maxLat - minLat;
+      const lonDiff = maxLon - minLon;
+      const maxDiff = Math.max(latDiff, lonDiff);
+      let targetZoom = 11;
+      if (maxDiff > 0.6) targetZoom = 9.5;
+      else if (maxDiff > 0.3) targetZoom = 10.5;
+      else if (maxDiff > 0.15) targetZoom = 11.8;
+      else targetZoom = 12.8;
+
+      setViewState(vs => ({
+        ...vs,
+        latitude: centerLat,
+        longitude: centerLon,
+        zoom: targetZoom,
+        transitionDuration: 1000,
+        transitionInterpolator: new FlyToInterpolator({ speed: 1.2 }),
+      }));
+    }
+  }, [geoData]);
+
   // ─── Layers ─────────────────────────────────────────────────────────────────
   const layers = useMemo(() => {
     const result = [];
 
-    result.push(new TileLayer({
-      id: 'basemap',
-      data: CARTO_DARK_TILE,
-      maxRequests: 20,
-      pickable: false,
-      minZoom: 0,
-      maxZoom: 19,
-      tileSize: 256,
-      renderSubLayers: props => {
-        const { bbox: { west, south, east, north } } = props.tile;
-        return new BitmapLayer(props, {
-          data: null,
-          image: props.data,
-          bounds: [west, south, east, north],
-        });
-      },
-    }));
-
     if (geoData?.features?.length) {
+      // Glow underlayer for focal weight
+      result.push(new GeoJsonLayer({
+        id: 'aqi-glow-layer',
+        data: geoData,
+        pickable: false,
+        filled: false,
+        stroked: true,
+        getLineColor: d => {
+          const rgba = hexToRGBA(d.properties?.fillColor, 180);
+          return [rgba[0], rgba[1], rgba[2], 160];
+        },
+        lineWidthMinPixels: 4,
+        getLineWidth: 25,
+        updateTriggers: { getLineColor: [horizon, geoData] },
+      }));
+
+      // Main Hex Layer
       result.push(new GeoJsonLayer({
         id: 'aqi-layer',
         data: geoData,
         pickable: true,
         filled: true,
         stroked: true,
-        getFillColor: d => hexToRGBA(d.properties?.fillColor),
-        getLineColor: [255, 255, 255, 30],
-        lineWidthMinPixels: 1,
-        getLineWidth: 5,
+        getFillColor: d => hexToRGBA(d.properties?.fillColor, 220),
+        getLineColor: d => {
+          const rgba = hexToRGBA(d.properties?.fillColor, 255);
+          return [Math.min(255, rgba[0] + 50), Math.min(255, rgba[1] + 50), Math.min(255, rgba[2] + 50), 240];
+        },
+        lineWidthMinPixels: 2,
+        getLineWidth: 12,
         updateTriggers: { getFillColor: [horizon, geoData] },
         transitions: { getFillColor: { duration: 700, type: 'interpolation' } },
         onClick: ({ object, x, y }) => {
@@ -202,12 +271,12 @@ function App() {
         filled: false,
         stroked: true,
         getLineColor: d => {
-          if (d.properties?.traffic_linked)    return [245, 158, 11, 220];
-          if (d.properties?.industrial_linked) return [139, 92, 246, 220];
+          if (d.properties?.traffic_linked)    return [245, 158, 11, 230];
+          if (d.properties?.industrial_linked) return [139, 92, 246, 230];
           return [0, 0, 0, 0];
         },
-        lineWidthMinPixels: 2,
-        getLineWidth: 30,
+        lineWidthMinPixels: 3,
+        getLineWidth: 35,
       }));
     }
 
@@ -245,6 +314,27 @@ function App() {
     };
   };
 
+  // Sync layers & viewState to overlay/map
+  useEffect(() => {
+    if (overlayRef.current) {
+      overlayRef.current.setProps({
+        layers,
+        getTooltip,
+      });
+    }
+  }, [layers]);
+
+  useEffect(() => {
+    if (mapRef.current) {
+      mapRef.current.flyTo({
+        center: [viewState.longitude, viewState.latitude],
+        zoom: viewState.zoom,
+        essential: true,
+        duration: viewState.transitionDuration || 0,
+      });
+    }
+  }, [viewState.latitude, viewState.longitude, viewState.zoom]);
+
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', background: 'var(--bg-base)' }}>
@@ -265,16 +355,49 @@ function App() {
         <BusinessImpact />
       </div>
 
-      {/* Map */}
-      <DeckGL
-        viewState={viewState}
-        onViewStateChange={({ viewState: vs }) => setViewState(vs)}
-        controller={true}
-        layers={layers}
-        getTooltip={getTooltip}
-        style={{ position: 'absolute', inset: 0 }}
-        onClick={({ object }) => { if (!object) setSelectedHex(null); }}
+      {/* Map Container */}
+      <div
+        ref={mapContainerRef}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
       />
+
+      {/* Persistent Map Station Label Badge */}
+      <div style={{
+        position: 'absolute',
+        top: 104,
+        left: 328,
+        zIndex: 10,
+        background: 'rgba(9,13,18,0.85)',
+        border: '1px solid var(--border-mid)',
+        borderLeft: '3px solid var(--accent)',
+        borderRadius: 2,
+        padding: '5px 10px',
+        backdropFilter: 'blur(8px)',
+        pointerEvents: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+      }}>
+        <span className="heartbeat-dot" style={{ background: 'var(--accent)' }} />
+        <span style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: '0.66rem',
+          fontWeight: 700,
+          letterSpacing: '0.08em',
+          color: 'var(--text-primary)',
+          textTransform: 'uppercase',
+        }}>
+          {geoData?.features?.length || 0} monitoring stations, {activeCity}
+        </span>
+        <span style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: '0.55rem',
+          color: 'var(--text-dim)',
+          letterSpacing: '0.04em',
+        }}>
+          (H3 RES 8 SPATIAL BOUNDS)
+        </span>
+      </div>
 
       {/* Hex popup */}
       {selectedHex && (
@@ -376,6 +499,93 @@ function App() {
           </div>
         )}
 
+        {/* Model stats — SURFACED TOP FOR STRONGEST TECHNICAL PROOF */}
+        <div className="stats-box" id="tour-model-stats">
+          <div style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.58rem',
+            fontWeight: 700,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: 'var(--text-dim)',
+            borderBottom: '1px solid var(--border-dim)',
+            paddingBottom: 7,
+            marginBottom: 8,
+          }}>
+            Model Performance
+          </div>
+
+          <div className="stats-row">
+            <span>Persistence RMSE</span>
+            <span className="stats-val" style={{ color: '#ef4444' }}>40.59</span>
+          </div>
+          <div className="stats-row">
+            <span>LightGBM RMSE</span>
+            <span className="stats-val" style={{ color: '#4ade80' }}>32.44</span>
+          </div>
+          <div style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.6rem',
+            color: 'var(--accent)',
+            letterSpacing: '0.06em',
+            marginTop: 3,
+            marginBottom: 10,
+          }}>
+            ↓ 20% vs. PERSISTENCE
+          </div>
+
+          {/* Source accuracy — Delhi only */}
+          {activeCity === 'Delhi' && (
+            <div style={{ borderTop: '1px solid var(--border-dim)', paddingTop: 8 }}>
+              <div style={{
+                fontFamily: 'var(--font-mono)', fontSize: '0.56rem',
+                letterSpacing: '0.12em', textTransform: 'uppercase',
+                color: 'var(--text-dim)', marginBottom: 7,
+              }}>Attribution Accuracy</div>
+              {!accuracy ? (
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>LOADING…</div>
+              ) : (
+                <>
+                  <div className="stats-row">
+                    <span>Traffic Precision</span>
+                    <span className="stats-val" style={{ color: '#fbbf24' }}>{pct(accuracy.traffic?.precision)}</span>
+                  </div>
+                  <div className="stats-row">
+                    <span>Traffic Recall</span>
+                    <span className="stats-val" style={{ color: '#fbbf24' }}>{pct(accuracy.traffic?.recall)}</span>
+                  </div>
+                  <div className="stats-row">
+                    <span>Industrial Precision</span>
+                    <span className="stats-val" style={{ color: '#a78bfa' }}>{pct(accuracy.industrial?.precision)}</span>
+                  </div>
+                  <div className="stats-row">
+                    <span>Industrial Recall</span>
+                    <span className="stats-val" style={{ color: '#a78bfa' }}>{pct(accuracy.industrial?.recall)}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Lead time */}
+          <div style={{ borderTop: '1px solid var(--border-dim)', paddingTop: 8, marginTop: 8 }}>
+            <div className="stats-row">
+              <span>Forecast Lead Time</span>
+              <span className="stats-val" style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '0.9rem', fontWeight: 700 }}>72H</span>
+            </div>
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.56rem',
+              color: 'var(--text-dim)',
+              marginTop: 3,
+              letterSpacing: '0.04em',
+              lineHeight: 1.5,
+            }}>
+              VS. 0H REACTIVE (CAAQMS)
+            </div>
+          </div>
+        </div>
+
         {/* Horizon control */}
         <div className="control-group" id="tour-horizon">
           <h2>Forecast Horizon</h2>
@@ -455,93 +665,6 @@ function App() {
                 <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.74rem', color: 'var(--text-secondary)' }}>{band}</span>
               </div>
             ))}
-          </div>
-        </div>
-
-        {/* Model stats */}
-        <div className="stats-box" id="tour-model-stats">
-          <div style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '0.58rem',
-            fontWeight: 700,
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-            color: 'var(--text-dim)',
-            borderBottom: '1px solid var(--border-dim)',
-            paddingBottom: 7,
-            marginBottom: 8,
-          }}>
-            Model Performance
-          </div>
-
-          <div className="stats-row">
-            <span>Persistence RMSE</span>
-            <span className="stats-val" style={{ color: '#ef4444' }}>40.59</span>
-          </div>
-          <div className="stats-row">
-            <span>LightGBM RMSE</span>
-            <span className="stats-val" style={{ color: '#4ade80' }}>32.44</span>
-          </div>
-          <div style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '0.6rem',
-            color: 'var(--accent)',
-            letterSpacing: '0.06em',
-            marginTop: 3,
-            marginBottom: 10,
-          }}>
-            ↓ 20% vs. PERSISTENCE
-          </div>
-
-          {/* Source accuracy — Delhi only */}
-          {activeCity === 'Delhi' && (
-            <div style={{ borderTop: '1px solid var(--border-dim)', paddingTop: 8 }}>
-              <div style={{
-                fontFamily: 'var(--font-mono)', fontSize: '0.56rem',
-                letterSpacing: '0.12em', textTransform: 'uppercase',
-                color: 'var(--text-dim)', marginBottom: 7,
-              }}>Attribution Accuracy</div>
-              {!accuracy ? (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>LOADING…</div>
-              ) : (
-                <>
-                  <div className="stats-row">
-                    <span>Traffic Precision</span>
-                    <span className="stats-val" style={{ color: '#fbbf24' }}>{pct(accuracy.traffic?.precision)}</span>
-                  </div>
-                  <div className="stats-row">
-                    <span>Traffic Recall</span>
-                    <span className="stats-val" style={{ color: '#fbbf24' }}>{pct(accuracy.traffic?.recall)}</span>
-                  </div>
-                  <div className="stats-row">
-                    <span>Industrial Precision</span>
-                    <span className="stats-val" style={{ color: '#a78bfa' }}>{pct(accuracy.industrial?.precision)}</span>
-                  </div>
-                  <div className="stats-row">
-                    <span>Industrial Recall</span>
-                    <span className="stats-val" style={{ color: '#a78bfa' }}>{pct(accuracy.industrial?.recall)}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Lead time */}
-          <div style={{ borderTop: '1px solid var(--border-dim)', paddingTop: 8, marginTop: 8 }}>
-            <div className="stats-row">
-              <span>Forecast Lead Time</span>
-              <span className="stats-val" style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>72H</span>
-            </div>
-            <div style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.56rem',
-              color: 'var(--text-dim)',
-              marginTop: 3,
-              letterSpacing: '0.04em',
-              lineHeight: 1.5,
-            }}>
-              VS. 0H REACTIVE (CAAQMS)
-            </div>
           </div>
         </div>
 

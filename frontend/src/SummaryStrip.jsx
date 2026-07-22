@@ -98,7 +98,20 @@ export default function SummaryStrip({ geoData, horizon, activeCity, onBandChang
   }, [geoData, forecast72]);
 
   useEffect(() => {
-    if (stats?.band && onBandChange) onBandChange(stats.band);
+    if (stats?.band) {
+      if (onBandChange) onBandChange(stats.band);
+      const colorMap = {
+        Good: '#00c853',
+        Satisfactory: '#aeea00',
+        Moderate: '#ffd600',
+        Poor: '#ff6d00',
+        'Very Poor': '#dd2c00',
+        Severe: '#880e4f',
+      };
+      const c = colorMap[stats.band] || '#880e4f';
+      document.documentElement.style.setProperty('--active-band-color', c);
+      document.documentElement.style.setProperty('--active-band-glow', `${c}33`);
+    }
   }, [stats?.band]);
 
   if (!stats) return (
