@@ -335,6 +335,33 @@ function App() {
     }
   }, [viewState.latitude, viewState.longitude, viewState.zoom]);
 
+  // Collapsible states
+  const [panelsOpen, setPanelsOpen] = useState({
+    identity: true,
+    alerts: true,
+    recommendations: true,
+    businessImpact: false,
+    modelPerformance: false,
+    aqiScale: false,
+    toggles: false,
+  });
+
+  const togglePanel = (key) => {
+    setPanelsOpen(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const setAllPanels = (val) => {
+    setPanelsOpen({
+      identity: val,
+      alerts: val,
+      recommendations: val,
+      businessImpact: val,
+      modelPerformance: val,
+      aqiScale: val,
+      toggles: val,
+    });
+  };
+
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', background: 'var(--bg-base)' }}>
@@ -345,327 +372,505 @@ function App() {
       {/* Summary hero strip */}
       <SummaryStrip geoData={geoData} horizon={horizon} activeCity={activeCity} onBandChange={setCurrentBand} />
 
-      {/* Left column */}
-      <div className="left-panel-col">
-        <AlertsPanel compareData={compareData} srcLookup={srcLookup} onSelectHex={flyToHex} />
-        <RecommendationsPanel onSelectHex={flyToHex} activeCity={activeCity} />
-        {showComparison && (
-          <CityComparison onSelectCity={handleCitySelect} activeCity={activeCity} />
-        )}
-        <BusinessImpact />
-      </div>
-
-      {/* Map Container */}
-      <div
-        ref={mapContainerRef}
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
-      />
-
-      {/* Persistent Map Station Label Badge */}
+      {/* ─── Main Content Container (2-Column Layout) ──────────────────── */}
       <div style={{
         position: 'absolute',
-        top: 104,
-        left: 328,
-        zIndex: 10,
-        background: 'rgba(9,13,18,0.85)',
-        border: '1px solid var(--border-mid)',
-        borderLeft: '3px solid var(--accent)',
-        borderRadius: 2,
-        padding: '5px 10px',
-        backdropFilter: 'blur(8px)',
-        pointerEvents: 'none',
+        top: 102,
+        left: 0,
+        right: 0,
+        bottom: 0,
         display: 'flex',
-        alignItems: 'center',
-        gap: 8,
+        overflow: 'hidden',
       }}>
-        <span className="heartbeat-dot" style={{ background: 'var(--accent)' }} />
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: '0.66rem',
-          fontWeight: 700,
-          letterSpacing: '0.08em',
-          color: 'var(--text-primary)',
-          textTransform: 'uppercase',
+
+        {/* LEFT SIDE: Map Container (65-70% width) */}
+        <div style={{
+          position: 'relative',
+          width: '68%',
+          height: '100%',
+          flexShrink: 0,
         }}>
-          {geoData?.features?.length || 0} monitoring stations, {activeCity}
-        </span>
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: '0.55rem',
-          color: 'var(--text-dim)',
-          letterSpacing: '0.04em',
-        }}>
-          (H3 RES 8 SPATIAL BOUNDS)
-        </span>
-      </div>
+          {/* Map */}
+          <div
+            ref={mapContainerRef}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+          />
 
-      {/* Hex popup */}
-      {selectedHex && (
-        <HexPopup
-          hexProps={selectedHex.props}
-          screenX={selectedHex.screenX}
-          screenY={selectedHex.screenY}
-          horizon={horizon}
-          srcLookup={srcLookup}
-          onClose={() => setSelectedHex(null)}
-          apiBase={API_BASE}
-          activeCity={activeCity}
-        />
-      )}
-
-      {/* ─── Right control panel ─────────────────────────────────────────── */}
-      <div className="ui-panel" id="tour-control-panel">
-
-        {/* Identity */}
-        <div id="tour-identity">
+          {/* Persistent Map Station Label Badge */}
           <div style={{
-            fontFamily: 'var(--font-mono)', fontSize: '0.58rem',
-            letterSpacing: '0.2em', textTransform: 'uppercase',
-            color: 'var(--accent)', marginBottom: 5,
-          }}>
-            AQI · INTEL / {activeCity.toUpperCase()}
-          </div>
-          <h1>Air Quality<br />Intelligence</h1>
-          <div style={{
-            fontFamily: 'var(--font-mono)', fontSize: '0.6rem',
-            color: 'var(--text-dim)', letterSpacing: '0.08em', marginTop: 4,
-          }}>
-            H3 HEX · LGBM · 72H AHEAD
-          </div>
-        </div>
-
-        {/* City selector */}
-        <div id="tour-city-selector">
-          <h2>Active City</h2>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-            {['Delhi','Ghaziabad','Noida','Mumbai'].map(c => (
-              <button
-                key={c}
-                onClick={() => {
-                  // Fly to city centre — reuse city-stats data or known defaults
-                  const CENTRES = {
-                    Delhi:      { map_lat: 28.6139, map_lon: 77.2090, map_zoom: 11 },
-                    Ghaziabad:  { map_lat: 28.6692, map_lon: 77.4538, map_zoom: 12 },
-                    Noida:      { map_lat: 28.5355, map_lon: 77.3910, map_zoom: 12 },
-                    Mumbai:     { map_lat: 19.0760, map_lon: 72.8777, map_zoom: 11 },
-                  };
-                  handleCitySelect({ city: c, display: c, ...(CENTRES[c] || CENTRES.Delhi) });
-                }}
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.62rem',
-                  fontWeight: 600,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  background: activeCity === c ? 'rgba(0,212,255,0.15)' : 'transparent',
-                  border: `1px solid ${activeCity === c ? 'var(--accent)' : 'var(--border-dim)'}`,
-                  color: activeCity === c ? 'var(--accent)' : 'var(--text-secondary)',
-                  borderRadius: 2,
-                  padding: '4px 8px',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                }}
-                onMouseEnter={e => {
-                  if (activeCity !== c) {
-                    e.target.style.borderColor = 'var(--border-hi)';
-                    e.target.style.color = 'var(--text-primary)';
-                  }
-                }}
-                onMouseLeave={e => {
-                  if (activeCity !== c) {
-                    e.target.style.borderColor = 'var(--border-dim)';
-                    e.target.style.color = 'var(--text-secondary)';
-                  }
-                }}
-              >{c}</button>
-            ))}
-          </div>
-        </div>
-
-        {/* Loading indicator */}
-        {loading && (
-          <div style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '0.6rem',
-            color: 'var(--accent)',
-            letterSpacing: '0.12em',
+            position: 'absolute',
+            top: 16,
+            left: 16,
+            zIndex: 10,
+            background: 'rgba(9,13,18,0.85)',
+            border: '1px solid var(--border-mid)',
+            borderLeft: '3px solid var(--accent)',
+            borderRadius: 2,
+            padding: '5px 10px',
+            backdropFilter: 'blur(8px)',
+            pointerEvents: 'none',
             display: 'flex',
             alignItems: 'center',
-            gap: 6,
-            marginTop: -6,
+            gap: 8,
           }}>
-            <span className="heartbeat-dot" />
-            FETCHING DATA…
-          </div>
-        )}
-
-        {/* Model stats — SURFACED TOP FOR STRONGEST TECHNICAL PROOF */}
-        <div className="stats-box" id="tour-model-stats">
-          <div style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '0.58rem',
-            fontWeight: 700,
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-            color: 'var(--text-dim)',
-            borderBottom: '1px solid var(--border-dim)',
-            paddingBottom: 7,
-            marginBottom: 8,
-          }}>
-            Model Performance
-          </div>
-
-          <div className="stats-row">
-            <span>Persistence RMSE</span>
-            <span className="stats-val" style={{ color: '#ef4444' }}>40.59</span>
-          </div>
-          <div className="stats-row">
-            <span>LightGBM RMSE</span>
-            <span className="stats-val" style={{ color: '#4ade80' }}>32.44</span>
-          </div>
-          <div style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '0.6rem',
-            color: 'var(--accent)',
-            letterSpacing: '0.06em',
-            marginTop: 3,
-            marginBottom: 10,
-          }}>
-            ↓ 20% vs. PERSISTENCE
-          </div>
-
-          {/* Source accuracy — Delhi only */}
-          {activeCity === 'Delhi' && (
-            <div style={{ borderTop: '1px solid var(--border-dim)', paddingTop: 8 }}>
-              <div style={{
-                fontFamily: 'var(--font-mono)', fontSize: '0.56rem',
-                letterSpacing: '0.12em', textTransform: 'uppercase',
-                color: 'var(--text-dim)', marginBottom: 7,
-              }}>Attribution Accuracy</div>
-              {!accuracy ? (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>LOADING…</div>
-              ) : (
-                <>
-                  <div className="stats-row">
-                    <span>Traffic Precision</span>
-                    <span className="stats-val" style={{ color: '#fbbf24' }}>{pct(accuracy.traffic?.precision)}</span>
-                  </div>
-                  <div className="stats-row">
-                    <span>Traffic Recall</span>
-                    <span className="stats-val" style={{ color: '#fbbf24' }}>{pct(accuracy.traffic?.recall)}</span>
-                  </div>
-                  <div className="stats-row">
-                    <span>Industrial Precision</span>
-                    <span className="stats-val" style={{ color: '#a78bfa' }}>{pct(accuracy.industrial?.precision)}</span>
-                  </div>
-                  <div className="stats-row">
-                    <span>Industrial Recall</span>
-                    <span className="stats-val" style={{ color: '#a78bfa' }}>{pct(accuracy.industrial?.recall)}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Lead time */}
-          <div style={{ borderTop: '1px solid var(--border-dim)', paddingTop: 8, marginTop: 8 }}>
-            <div className="stats-row">
-              <span>Forecast Lead Time</span>
-              <span className="stats-val" style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '0.9rem', fontWeight: 700 }}>72H</span>
-            </div>
-            <div style={{
+            <span className="heartbeat-dot" style={{ background: 'var(--accent)' }} />
+            <span style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '0.56rem',
-              color: 'var(--text-dim)',
-              marginTop: 3,
-              letterSpacing: '0.04em',
-              lineHeight: 1.5,
+              fontSize: '0.66rem',
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              color: 'var(--text-primary)',
+              textTransform: 'uppercase',
             }}>
-              VS. 0H REACTIVE (CAAQMS)
-            </div>
+              {geoData?.features?.length || 0} monitoring stations, {activeCity}
+            </span>
+            <span style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.55rem',
+              color: 'var(--text-dim)',
+              letterSpacing: '0.04em',
+            }}>
+              (H3 RES 8 SPATIAL BOUNDS)
+            </span>
           </div>
+
+          {/* Hex popup */}
+          {selectedHex && (
+            <HexPopup
+              hexProps={selectedHex.props}
+              screenX={selectedHex.screenX}
+              screenY={selectedHex.screenY}
+              horizon={horizon}
+              srcLookup={srcLookup}
+              onClose={() => setSelectedHex(null)}
+              apiBase={API_BASE}
+              activeCity={activeCity}
+            />
+          )}
         </div>
 
-        {/* Horizon control */}
-        <div className="control-group" id="tour-horizon">
-          <h2>Forecast Horizon</h2>
-          <div className="button-group">
-            {[['0','NOW'],['24','+24H'],['48','+48H'],['72','+72H']].map(([val, label]) => (
-              <button
-                key={val}
-                className={horizon === val ? 'active' : ''}
-                onClick={() => setHorizon(val)}
-              >{label}</button>
-            ))}
-          </div>
-          <div className="play-pause-controls">
-            <button className="play-pause-btn" onClick={() => setPlaying(p => !p)}>
-              {playing ? '⏸ PAUSE' : '▶ PLAY'}
+        {/* RIGHT SIDE: Single Scrollable Column containing ALL side panels */}
+        <div className="ui-panel-scrollable">
+
+          {/* Expand / Collapse All Control */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 12,
+            marginBottom: -4,
+            paddingRight: 4,
+          }}>
+            <button
+              onClick={() => setAllPanels(true)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--accent)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.58rem',
+                letterSpacing: '0.05em',
+                cursor: 'pointer',
+                padding: 0,
+                textTransform: 'uppercase',
+              }}
+            >
+              [Expand All]
             </button>
-            {playing && (
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: '0.06em' }}>
-                CYCLING…
+            <button
+              onClick={() => setAllPanels(false)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-secondary)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.58rem',
+                letterSpacing: '0.05em',
+                cursor: 'pointer',
+                padding: 0,
+                textTransform: 'uppercase',
+              }}
+            >
+              [Collapse All]
+            </button>
+          </div>
+
+          {/* 1. Identity & Active City & Forecast Horizon & Play */}
+          <div className="panel-box" id="tour-identity">
+            <div
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+              onClick={() => togglePanel('identity')}
+            >
+              <div className="panel-label" style={{ marginBottom: 0 }}>
+                ⚙️ CONTROLS / {activeCity.toUpperCase()}
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>
+                {panelsOpen.identity ? '▲' : '▼'}
               </span>
+            </div>
+
+            {panelsOpen.identity && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{
+                  fontFamily: 'var(--font-mono)', fontSize: '0.58rem',
+                  letterSpacing: '0.2em', textTransform: 'uppercase',
+                  color: 'var(--accent)', marginBottom: 5,
+                }}>
+                  AQI · INTEL
+                </div>
+                <h1 style={{ fontSize: '1rem', marginBottom: 12 }}>Air Quality Intelligence</h1>
+
+                {/* City Selector */}
+                <div id="tour-city-selector" style={{ marginBottom: 12 }}>
+                  <h2>Active City</h2>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {['Delhi','Ghaziabad','Noida','Mumbai'].map(c => (
+                      <button
+                        key={c}
+                        onClick={() => {
+                          const CENTRES = {
+                            Delhi:      { map_lat: 28.6139, map_lon: 77.2090, map_zoom: 11 },
+                            Ghaziabad:  { map_lat: 28.6692, map_lon: 77.4538, map_zoom: 12 },
+                            Noida:      { map_lat: 28.5355, map_lon: 77.3910, map_zoom: 12 },
+                            Mumbai:     { map_lat: 19.0760, map_lon: 72.8777, map_zoom: 11 },
+                          };
+                          handleCitySelect({ city: c, display: c, ...(CENTRES[c] || CENTRES.Delhi) });
+                        }}
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.62rem',
+                          fontWeight: 600,
+                          letterSpacing: '0.06em',
+                          textTransform: 'uppercase',
+                          background: activeCity === c ? 'rgba(0,212,255,0.15)' : 'transparent',
+                          border: `1px solid ${activeCity === c ? 'var(--accent)' : 'var(--border-dim)'}`,
+                          color: activeCity === c ? 'var(--accent)' : 'var(--text-secondary)',
+                          borderRadius: 2,
+                          padding: '4px 8px',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}
+                        onMouseEnter={e => {
+                          if (activeCity !== c) {
+                            e.target.style.borderColor = 'var(--border-hi)';
+                            e.target.style.color = 'var(--text-primary)';
+                          }
+                        }}
+                        onMouseLeave={e => {
+                          if (activeCity !== c) {
+                            e.target.style.borderColor = 'var(--border-dim)';
+                            e.target.style.color = 'var(--text-secondary)';
+                          }
+                        }}
+                      >{c}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Loading indicator */}
+                {loading && (
+                  <div style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.6rem',
+                    color: 'var(--accent)',
+                    letterSpacing: '0.12em',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginBottom: 12,
+                  }}>
+                    <span className="heartbeat-dot" />
+                    FETCHING DATA…
+                  </div>
+                )}
+
+                {/* Horizon control */}
+                <div className="control-group" id="tour-horizon">
+                  <h2>Forecast Horizon</h2>
+                  <div className="button-group">
+                    {[['0','NOW'],['24','+24H'],['48','+48H'],['72','+72H']].map(([val, label]) => (
+                      <button
+                        key={val}
+                        className={horizon === val ? 'active' : ''}
+                        onClick={() => setHorizon(val)}
+                      >{label}</button>
+                    ))}
+                  </div>
+                  <div className="play-pause-controls" style={{ marginTop: 8 }}>
+                    <button className="play-pause-btn" onClick={() => setPlaying(p => !p)}>
+                      {playing ? '⏸ PAUSE' : '▶ PLAY'}
+                    </button>
+                    {playing && (
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-dim)', letterSpacing: '0.06em', marginLeft: 8 }}>
+                        CYCLING…
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
             )}
           </div>
-        </div>
 
-        {/* Source attribution toggle */}
-        <div id="tour-source-toggle">
-          <div className="toggle-row" style={{ marginBottom: 6 }}>
-            <span>Source Attribution</span>
-            <label className="switch">
-              <input type="checkbox" checked={showSources} onChange={e => setShowSources(e.target.checked)} />
-              <span className="slider" />
-            </label>
-          </div>
-          {showSources && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingLeft: 2 }}>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: '#fbbf24', letterSpacing: '0.06em' }}>◆ TRAFFIC</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: '#a78bfa', letterSpacing: '0.06em' }}>◆ INDUSTRIAL</span>
+          {/* 2. Signal Alerts */}
+          <div className="panel-box">
+            <div
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+              onClick={() => togglePanel('alerts')}
+            >
+              <div className="panel-label" style={{ marginBottom: 0 }}>
+                ⚡ Signal Alerts
               </div>
-              {/* Traffic proxy disclosure — visible whenever source overlay is on */}
-              <div style={{
-                fontFamily: 'var(--font-mono)', fontSize: '0.55rem',
-                color: 'var(--text-dim)', letterSpacing: '0.05em',
-                lineHeight: 1.5, padding: '5px 7px',
-                border: '1px solid var(--border-dim)', borderRadius: 2,
-                background: 'rgba(0,0,0,0.2)',
-              }}>
-                <span style={{ color: 'var(--accent)', letterSpacing: '0.1em' }}>PROXY NOTE</span>
-                {' '}Traffic scores = OSM road-class weights (motorway 10× → residential 0.5×) + time-of-day scaling.
-                {' '}<span style={{ color: '#2d3748' }}>Not live vehicle telemetry.</span>
-              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>
+                {panelsOpen.alerts ? '▲' : '▼'}
+              </span>
             </div>
-          )}
-        </div>
-
-        {/* Cross-city comparison toggle */}
-        <div className="toggle-row">
-          <span>Cross-City Comparison</span>
-          <label className="switch">
-            <input type="checkbox" checked={showComparison} onChange={e => setShowComparison(e.target.checked)} />
-            <span className="slider" />
-          </label>
-        </div>
-
-        {/* CPCB legend */}
-        <div className="control-group">
-          <h2>CPCB AQI Scale</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            {LEGEND.map(({ band, color }) => (
-              <div key={band} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{
-                  width: 10, height: 10,
-                  background: color,
-                  flexShrink: 0,
-                  clipPath: 'polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)',
-                }} />
-                <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.74rem', color: 'var(--text-secondary)' }}>{band}</span>
+            {panelsOpen.alerts && (
+              <div style={{ marginTop: 12 }}>
+                <AlertsPanel compareData={compareData} srcLookup={srcLookup} onSelectHex={flyToHex} />
               </div>
-            ))}
+            )}
           </div>
+
+          {/* 3. Enforcement Log (Recommendations) */}
+          <div className="panel-box">
+            <div
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+              onClick={() => togglePanel('recommendations')}
+            >
+              <div className="panel-label" style={{ marginBottom: 0 }}>
+                🏛 Enforcement Log
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>
+                {panelsOpen.recommendations ? '▲' : '▼'}
+              </span>
+            </div>
+            {panelsOpen.recommendations && (
+              <div style={{ marginTop: 12 }}>
+                <RecommendationsPanel onSelectHex={flyToHex} activeCity={activeCity} />
+              </div>
+            )}
+          </div>
+
+          {/* 4. Business Impact */}
+          <div className="panel-box">
+            <div
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+              onClick={() => togglePanel('businessImpact')}
+            >
+              <div className="panel-label" style={{ marginBottom: 0 }}>
+                📊 Business Impact
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>
+                {panelsOpen.businessImpact ? '▲' : '▼'}
+              </span>
+            </div>
+            {panelsOpen.businessImpact && (
+              <div style={{ marginTop: 12 }}>
+                <BusinessImpact />
+              </div>
+            )}
+          </div>
+
+          {/* 5. Model Performance & 6. Attribution Accuracy */}
+          <div className="panel-box" id="tour-model-stats">
+            <div
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+              onClick={() => togglePanel('modelPerformance')}
+            >
+              <div className="panel-label" style={{ marginBottom: 0 }}>
+                📈 Model Stats
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>
+                {panelsOpen.modelPerformance ? '▲' : '▼'}
+              </span>
+            </div>
+
+            {panelsOpen.modelPerformance && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.58rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  color: 'var(--text-dim)',
+                  borderBottom: '1px solid var(--border-dim)',
+                  paddingBottom: 7,
+                  marginBottom: 8,
+                }}>
+                  Model Performance
+                </div>
+
+                <div className="stats-row">
+                  <span>Persistence RMSE</span>
+                  <span className="stats-val" style={{ color: '#ef4444' }}>40.59</span>
+                </div>
+                <div className="stats-row">
+                  <span>LightGBM RMSE</span>
+                  <span className="stats-val" style={{ color: '#4ade80' }}>32.44</span>
+                </div>
+                <div style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.6rem',
+                  color: 'var(--accent)',
+                  letterSpacing: '0.06em',
+                  marginTop: 3,
+                  marginBottom: 10,
+                }}>
+                  ↓ 20% vs. PERSISTENCE
+                </div>
+
+                {/* Attribution Accuracy — Delhi only */}
+                {activeCity === 'Delhi' && (
+                  <div style={{ borderTop: '1px solid var(--border-dim)', paddingTop: 8 }}>
+                    <div style={{
+                      fontFamily: 'var(--font-mono)', fontSize: '0.56rem',
+                      letterSpacing: '0.12em', textTransform: 'uppercase',
+                      color: 'var(--text-dim)', marginBottom: 7,
+                    }}>Attribution Accuracy</div>
+                    {!accuracy ? (
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>LOADING…</div>
+                    ) : (
+                      <>
+                        <div className="stats-row">
+                          <span>Traffic Precision</span>
+                          <span className="stats-val" style={{ color: '#fbbf24' }}>{pct(accuracy.traffic?.precision)}</span>
+                        </div>
+                        <div className="stats-row">
+                          <span>Traffic Recall</span>
+                          <span className="stats-val" style={{ color: '#fbbf24' }}>{pct(accuracy.traffic?.recall)}</span>
+                        </div>
+                        <div className="stats-row">
+                          <span>Industrial Precision</span>
+                          <span className="stats-val" style={{ color: '#a78bfa' }}>{pct(accuracy.industrial?.precision)}</span>
+                        </div>
+                        <div className="stats-row">
+                          <span>Industrial Recall</span>
+                          <span className="stats-val" style={{ color: '#a78bfa' }}>{pct(accuracy.industrial?.recall)}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Lead time */}
+                <div style={{ borderTop: '1px solid var(--border-dim)', paddingTop: 8, marginTop: 8 }}>
+                  <div className="stats-row">
+                    <span>Forecast Lead Time</span>
+                    <span className="stats-val" style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '0.9rem', fontWeight: 700 }}>72H</span>
+                  </div>
+                  <div style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.56rem',
+                    color: 'var(--text-dim)',
+                    marginTop: 3,
+                    letterSpacing: '0.04em',
+                    lineHeight: 1.5,
+                  }}>
+                    VS. 0H REACTIVE (CAAQMS)
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 7. CPCB AQI Scale legend */}
+          <div className="panel-box">
+            <div
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+              onClick={() => togglePanel('aqiScale')}
+            >
+              <div className="panel-label" style={{ marginBottom: 0 }}>
+                🎨 AQI Scale
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>
+                {panelsOpen.aqiScale ? '▲' : '▼'}
+              </span>
+            </div>
+            {panelsOpen.aqiScale && (
+              <div style={{ marginTop: 12 }}>
+                <div className="control-group">
+                  <h2>CPCB AQI Scale</h2>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {LEGEND.map(({ band, color }) => (
+                      <div key={band} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{
+                          width: 10, height: 10,
+                          background: color,
+                          flexShrink: 0,
+                          clipPath: 'polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)',
+                        }} />
+                        <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.74rem', color: 'var(--text-secondary)' }}>{band}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 8. Source Attribution / Cross-City Comparison toggles */}
+          <div className="panel-box">
+            <div
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+              onClick={() => togglePanel('toggles')}
+            >
+              <div className="panel-label" style={{ marginBottom: 0 }}>
+                🔄 Map Toggles
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-dim)' }}>
+                {panelsOpen.toggles ? '▲' : '▼'}
+              </span>
+            </div>
+            {panelsOpen.toggles && (
+              <div style={{ marginTop: 12 }}>
+                {/* Source attribution toggle */}
+                <div id="tour-source-toggle" style={{ marginBottom: 12 }}>
+                  <div className="toggle-row" style={{ marginBottom: 6 }}>
+                    <span>Source Attribution</span>
+                    <label className="switch">
+                      <input type="checkbox" checked={showSources} onChange={e => setShowSources(e.target.checked)} />
+                      <span className="slider" />
+                    </label>
+                  </div>
+                  {showSources && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingLeft: 2 }}>
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: '#fbbf24', letterSpacing: '0.06em' }}>◆ TRAFFIC</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: '#a78bfa', letterSpacing: '0.06em' }}>◆ INDUSTRIAL</span>
+                      </div>
+                      <div style={{
+                        fontFamily: 'var(--font-mono)', fontSize: '0.55rem',
+                        color: 'var(--text-dim)', letterSpacing: '0.05em',
+                        lineHeight: 1.5, padding: '5px 7px',
+                        border: '1px solid var(--border-dim)', borderRadius: 2,
+                        background: 'rgba(0,0,0,0.2)',
+                      }}>
+                        <span style={{ color: 'var(--accent)', letterSpacing: '0.1em' }}>PROXY NOTE</span>
+                        {' '}Traffic scores = OSM road-class weights (motorway 10× → residential 0.5×) + time-of-day scaling.
+                        {' '}<span style={{ color: '#2d3748' }}>Not live vehicle telemetry.</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Cross-city comparison toggle */}
+                <div className="toggle-row">
+                  <span>Cross-City Comparison</span>
+                  <label className="switch">
+                    <input type="checkbox" checked={showComparison} onChange={e => setShowComparison(e.target.checked)} />
+                    <span className="slider" />
+                  </label>
+                </div>
+
+                {showComparison && (
+                  <div style={{ marginTop: 12 }}>
+                    <CityComparison onSelectCity={handleCitySelect} activeCity={activeCity} />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
         </div>
 
       </div>
